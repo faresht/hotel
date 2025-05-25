@@ -1,6 +1,8 @@
 package com.tunisiastay.repository;
 
 import com.tunisiastay.entity.Room;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +16,13 @@ import java.util.List;
 public interface RoomRepository extends JpaRepository<Room, Long> {
     
     List<Room> findByHotelIdAndAvailableTrue(Long hotelId);
+    
+    Page<Room> findByHotelId(Long hotelId, Pageable pageable);
+    
+    Page<Room> findByHotelIdAndNameContainingIgnoreCase(Long hotelId, String name, Pageable pageable);
+    
+    Page<Room> findByNameContainingIgnoreCaseOrRoomNumberContainingIgnoreCase(
+        String name, String roomNumber, Pageable pageable);
     
     @Query("SELECT r FROM Room r WHERE r.hotel.id = :hotelId AND r.available = true AND " +
            "r.capacity >= :guests AND " +

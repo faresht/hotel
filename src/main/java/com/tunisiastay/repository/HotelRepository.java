@@ -39,4 +39,7 @@ public interface HotelRepository extends JpaRepository<Hotel, Long> {
     Page<Hotel> findByPriceRange(@Param("minPrice") BigDecimal minPrice,
                                 @Param("maxPrice") BigDecimal maxPrice,
                                 Pageable pageable);
+    
+    Page<Hotel> findByNameContainingIgnoreCaseOrLocationContainingIgnoreCase(
+        String name, String location, Pageable pageable);
 }

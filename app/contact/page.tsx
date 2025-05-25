@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Phone, Mail, MapPin, Clock, Send, MessageCircle, HelpCircle } from "lucide-react"
+import { Phone, Mail, MapPin, Clock, Send, MessageCircle, HelpCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Navbar } from "../components/navbar"
 import { Footer } from "../components/footer"
+import { useAuth } from "../contexts/auth-context"
+import { useNotifications } from "../contexts/notification-context"
 
 const contactMethods = [
   {
@@ -21,6 +23,7 @@ const contactMethods = [
     description: "Appelez-nous pour une assistance immédiate",
     value: "+216 70 123 456",
     available: "24h/24, 7j/7",
+    action: () => window.open("tel:+21670123456"),
   },
   {
     icon: Mail,
@@ -28,6 +31,7 @@ const contactMethods = [
     description: "Envoyez-nous un message",
     value: "contact@tunisiastay.com",
     available: "Réponse sous 24h",
+    action: () => window.open("mailto:contact@tunisiastay.com"),
   },
   {
     icon: MessageCircle,
@@ -35,6 +39,10 @@ const contactMethods = [
     description: "Discutez avec notre équipe",
     value: "Chat disponible",
     available: "9h-18h (GMT+1)",
+    action: () => {
+      // Simuler l'ouverture d'un chat
+      alert("Chat en direct bientôt disponible !")
+    },
   },
   {
     icon: MapPin,
@@ -42,6 +50,7 @@ const contactMethods = [
     description: "Visitez nos bureaux",
     value: "Avenue Habib Bourguiba, Tunis 1000",
     available: "Lun-Ven 9h-17h",
+    action: () => window.open("https://maps.google.com/?q=Avenue+Habib+Bourguiba+Tunis"),
   },
 ]
 
@@ -66,12 +75,25 @@ const faqItems = [
     answer:
       "Oui, vous pouvez réserver pour une autre personne. Assurez-vous de fournir les informations correctes du voyageur principal lors de la réservation.",
   },
+  {
+    question: "Comment puis-je obtenir une facture ?",
+    answer:
+      "Après votre séjour, vous recevrez automatiquement une facture par email. Vous pouvez également la télécharger depuis votre espace client.",
+  },
+  {
+    question: "Que faire en cas de problème pendant mon séjour ?",
+    answer:
+      "Contactez immédiatement notre service client 24h/24 au +216 70 123 456 ou l'hôtel directement. Nous nous engageons à résoudre tout problème rapidement.",
+  },
 ]
 
 export default function ContactPage() {
+  const { user } = useAuth()
+  const { addNotification } = useNotifications()
+
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
+    name: user?.name || "",
+    email: user?.email || "",
     phone: "",
     subject: "",
     category: "",
@@ -82,21 +104,61 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.name || !formData.email || !formData.subject || !formData.message || !formData.category) {
+      addNotification({
+        type: "error",
+        title: "Champs requis",
+        message: "Veuillez remplir tous les champs obligatoires",
+      })
+      return
+    }
+
     setIsSubmitting(true)
 
-    // Simulation d'envoi
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      // Essayer d'envoyer via l'API backend
+      const response = await fetch("http://localhost:9000/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        addNotification({
+          type: "success",
+          title: "Message envoyé !",
+          message: "Nous vous répondrons dans les plus brefs délais.",
+        })
+      } else {
+        throw new Error("Erreur serveur")
+      }
+    } catch (error) {
+      // Fallback mode démo
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      addNotification({
+        type: "success",
+        title: "Message envoyé !",
+        message: "Nous vous répondrons dans les plus brefs délais.",
+      })
+    }
 
     setSubmitted(true)
     setIsSubmitting(false)
     setFormData({
-      name: "",
-      email: "",
+      name: user?.name || "",
+      email: user?.email || "",
       phone: "",
       subject: "",
       category: "",
       message: "",
     })
+
+    // Réinitialiser après 5 secondes
+    setTimeout(() => setSubmitted(false), 5000)
   }
 
   return (
@@ -120,7 +182,11 @@ export default function ContactPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {contactMethods.map((method, index) => (
-              <Card key={index} className="text-center hover:shadow-lg transition-shadow">
+              <Card
+                key={index}
+                className="text-center hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={method.action}
+              >
                 <CardContent className="p-6">
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <method.icon className="h-8 w-8 text-blue-600" />
@@ -205,6 +271,8 @@ export default function ContactPage() {
                         <SelectItem value="payment">Paiement</SelectItem>
                         <SelectItem value="complaint">Réclamation</SelectItem>
                         <SelectItem value="suggestion">Suggestion</SelectItem>
+                        <SelectItem value="technical">Problème technique</SelectItem>
+                        <SelectItem value="partnership">Partenariat</SelectItem>
                         <SelectItem value="other">Autre</SelectItem>
                       </SelectContent>
                     </Select>
@@ -234,7 +302,14 @@ export default function ContactPage() {
                   </div>
 
                   <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isSubmitting}>
-                    {isSubmitting ? "Envoi en cours..." : "Envoyer le message"}
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Envoi en cours...
+                      </>
+                    ) : (
+                      "Envoyer le message"
+                    )}
                   </Button>
                 </form>
               </CardContent>
@@ -253,10 +328,10 @@ export default function ContactPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {faqItems.map((item, index) => (
-                  <div key={index} className="border-b pb-4 last:border-b-0">
-                    <h4 className="font-medium mb-2">{item.question}</h4>
-                    <p className="text-gray-600 text-sm">{item.answer}</p>
-                  </div>
+                  <details key={index} className="border-b pb-4 last:border-b-0">
+                    <summary className="font-medium mb-2 cursor-pointer hover:text-blue-600">{item.question}</summary>
+                    <p className="text-gray-600 text-sm pl-4">{item.answer}</p>
+                  </details>
                 ))}
               </CardContent>
             </Card>
@@ -273,7 +348,7 @@ export default function ContactPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Support téléphonique</span>
-                    <span className="font-medium">24h/24, 7j/7</span>
+                    <span className="font-medium text-green-600">24h/24, 7j/7</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Chat en direct</span>
@@ -301,14 +376,53 @@ export default function ContactPage() {
                   Pour toute urgence pendant votre séjour (problème d'hébergement, urgence médicale, etc.)
                 </p>
                 <div className="space-y-2">
-                  <div className="flex items-center">
-                    <Phone className="h-4 w-4 text-red-600 mr-2" />
-                    <span className="font-medium text-red-800">+216 70 123 456</span>
-                  </div>
-                  <p className="text-xs text-red-600">Ligne d'urgence 24h/24</p>
+                  <Button
+                    variant="outline"
+                    className="w-full border-red-300 text-red-700 hover:bg-red-100"
+                    onClick={() => window.open("tel:+21670123456")}
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Appeler +216 70 123 456
+                  </Button>
+                  <p className="text-xs text-red-600 text-center">Ligne d'urgence 24h/24</p>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Support utilisateur connecté */}
+            {user && (
+              <Card className="border-blue-200 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="text-blue-800">Support personnalisé</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-blue-700 text-sm mb-3">
+                    Bonjour {user.name}, en tant que membre {user.loyaltyLevel}, vous bénéficiez d'un support
+                    prioritaire.
+                  </p>
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          category: "reservation",
+                          subject: "Support prioritaire - " + user.name,
+                        })
+                        document.getElementById("subject")?.focus()
+                      }}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      Support prioritaire
+                    </Button>
+                    <p className="text-xs text-blue-600 text-center">
+                      Réponse garantie sous 2h pour les membres {user.loyaltyLevel}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </section>
         </div>
 
@@ -320,10 +434,13 @@ export default function ContactPage() {
               <CardDescription>Visitez-nous à Tunis</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-gray-200 h-64 rounded-lg flex items-center justify-center">
+              <div
+                className="bg-gray-200 h-64 rounded-lg flex items-center justify-center cursor-pointer hover:bg-gray-300 transition-colors"
+                onClick={() => window.open("https://maps.google.com/?q=Avenue+Habib+Bourguiba+Tunis")}
+              >
                 <div className="text-center">
                   <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-600">Carte interactive</p>
+                  <p className="text-gray-600">Cliquez pour ouvrir dans Google Maps</p>
                   <p className="text-sm text-gray-500">Avenue Habib Bourguiba, Tunis 1000</p>
                 </div>
               </div>

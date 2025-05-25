@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api"
 
 class ApiClient {
   private baseURL: string
@@ -41,14 +41,11 @@ class ApiClient {
       const response = await fetch(url, {
         ...options,
         headers,
-        timeout: 10000, // 10 secondes de timeout
       })
 
-      // Vérifier le content-type avant de parser
       const contentType = response.headers.get("content-type")
 
       if (!response.ok) {
-        // Essayer de lire le texte d'erreur
         let errorText = `HTTP ${response.status}: ${response.statusText}`
         try {
           if (contentType?.includes("application/json")) {
@@ -64,7 +61,6 @@ class ApiClient {
         throw new Error(errorText)
       }
 
-      // Vérifier si la réponse est du JSON
       if (!contentType || !contentType.includes("application/json")) {
         const responseText = await response.text()
         console.warn(`API endpoint ${endpoint} returned non-JSON response:`, {
@@ -75,7 +71,6 @@ class ApiClient {
         throw new Error(`API endpoint returned ${contentType || "unknown content type"} instead of JSON`)
       }
 
-      // Parser le JSON
       const text = await response.text()
       if (!text.trim()) {
         throw new Error("API returned empty response")
@@ -89,16 +84,10 @@ class ApiClient {
         throw new Error("Invalid JSON response from API")
       }
     } catch (error) {
-      // Améliorer les messages d'erreur
       if (error instanceof TypeError && error.message.includes("fetch")) {
         throw new Error(`Cannot connect to API at ${url}. Please check if the backend is running.`)
       }
 
-      if (error.name === "AbortError") {
-        throw new Error("API request timeout")
-      }
-
-      // Relancer l'erreur avec plus de contexte
       throw new Error(`API request failed: ${error.message}`)
     }
   }
@@ -230,16 +219,170 @@ class ApiClient {
     return this.request<any>("/admin/dashboard")
   }
 
-  async getAllUsers(page = 0, size = 10) {
-    return this.request<{ content: any[]; totalElements: number }>(`/admin/users?page=${page}&size=${size}`)
+  async getAllUsers(page = 0, size = 10, search?: string, sortBy = "id", sortDir = "desc") {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+      sortBy,
+      sortDir,
+    })
+    if (search) params.append("search", search)
+
+    return this.request<{ content: any[]; totalElements: number }>(`/admin/users?${params}`)
   }
 
-  async getAllHotels(page = 0, size = 10) {
-    return this.request<{ content: any[]; totalElements: number }>(`/admin/hotels?page=${page}&size=${size}`)
+  async getAllHotels(page = 0, size = 10, search?: string, sortBy = "id", sortDir = "desc") {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+      sortBy,
+      sortDir,
+    })
+    if (search) params.append("search", search)
+
+    return this.request<{ content: any[]; totalElements: number }>(`/admin/hotels?${params}`)
   }
 
-  async getAllBookings(page = 0, size = 10) {
-    return this.request<{ content: any[]; totalElements: number }>(`/admin/bookings?page=${page}&size=${size}`)
+  async getAllRooms(page = 0, size = 10, search?: string, hotelId?: number) {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    })
+    if (search) params.append("search", search)
+    if (hotelId) params.append("hotelId", hotelId.toString())
+
+    return this.request<{ content: any[]; totalElements: number }>(`/admin/rooms?${params}`)
+  }
+
+  async getAllBookings(page = 0, size = 10, search?: string, status?: string) {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    })
+    if (search) params.append("search", search)
+    if (status) params.append("status", status)
+
+    return this.request<{ content: any[]; totalElements: number }>(`/admin/bookings?${params}`)
+  }
+
+  // CRUD operations for admin
+  async updateUser(id: number, userData: any) {
+    return this.request<any>(`/admin/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(userData),
+    })
+  }
+
+  async deleteUser(id: number) {
+    return this.request<void>(`/admin/users/${id}`, {
+      method: "DELETE",
+    })
+  }
+
+  async toggleUserStatus(id: number) {
+    return this.request<any>(`/admin/users/${id}/toggle-status`, {
+      method: "PUT",
+    })
+  }
+
+  async createHotel(hotelData: any) {
+    return this.request<any>("/admin/hotels", {
+      method: "POST",
+      body: JSON.stringify(hotelData),
+    })
+  }
+
+  async updateHotel(id: number, hotelData: any) {
+    return this.request<any>(`/admin/hotels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(hotelData),
+    })
+  }
+
+  async deleteHotel(id: number) {
+    return this.request<void>(`/admin/hotels/${id}`, {
+      method: "DELETE",
+    })
+  }
+
+  async toggleHotelAvailability(id: number) {
+    return this.request<any>(`/admin/hotels/${id}/toggle-availability`, {
+      method: "PUT",
+    })
+  }
+
+  async toggleHotelFeatured(id: number) {
+    return this.request<any>(`/admin/hotels/${id}/toggle-featured`, {
+      method: "PUT",
+    })
+  }
+
+  async createRoom(roomData: any) {
+    return this.request<any>("/admin/rooms", {
+      method: "POST",
+      body: JSON.stringify(roomData),
+    })
+  }
+
+  async updateRoom(id: number, roomData: any) {
+    return this.request<any>(`/admin/rooms/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(roomData),
+    })
+  }
+
+  async deleteRoom(id: number) {
+    return this.request<void>(`/admin/rooms/${id}`, {
+      method: "DELETE",
+    })
+  }
+
+  async toggleRoomAvailability(id: number) {
+    return this.request<any>(`/admin/rooms/${id}/toggle-availability`, {
+      method: "PUT",
+    })
+  }
+
+  async updateBookingStatus(id: number, status: string) {
+    return this.request<any>(`/admin/bookings/${id}/status?status=${status}`, {
+      method: "PUT",
+    })
+  }
+
+  async deleteBooking(id: number) {
+    return this.request<void>(`/admin/bookings/${id}`, {
+      method: "DELETE",
+    })
+  }
+
+  // AI Price Prediction
+  async predictPrice(data: {
+    hotelId: number
+    roomType: string
+    checkInDate: string
+    checkOutDate: string
+    season: string
+    occupancyRate: number
+    localEvents: string[]
+  }) {
+    return this.request<{
+      predictedPrice: number
+      confidence: number
+      factors: any[]
+      recommendations: string[]
+    }>("/admin/ai/predict-price", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getSeasonalTrends(hotelId?: number) {
+    const params = hotelId ? `?hotelId=${hotelId}` : ""
+    return this.request<any>(`/admin/ai/seasonal-trends${params}`)
+  }
+
+  async getMarketAnalysis() {
+    return this.request<any>("/admin/ai/market-analysis")
   }
 
   // Méthode pour tester la connexion API
@@ -250,7 +393,6 @@ class ApiClient {
         headers: {
           "Content-Type": "application/json",
         },
-        timeout: 5000,
       })
       return {
         success: response.ok,

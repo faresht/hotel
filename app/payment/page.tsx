@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CreditCard, Shield, Lock, Check, ArrowLeft } from "lucide-react"
+import { CreditCard, Shield, Lock, Check, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,27 +12,10 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 import { Navbar } from "../components/navbar"
 import { useAuth } from "../contexts/auth-context"
 import { useNotifications } from "../contexts/notification-context"
-
-// Simulation des données de réservation
-const bookingData = {
-  hotel: "Four Seasons Tunis",
-  location: "Gammarth",
-  room: "Suite Deluxe avec vue mer",
-  checkIn: "2024-03-15",
-  checkOut: "2024-03-20",
-  nights: 5,
-  guests: 2,
-  roomPrice: 280,
-  totalRoomPrice: 1400,
-  taxes: 98,
-  serviceFee: 35,
-  discount: 70, // Réduction fidélité
-  total: 1463,
-  image: "/placeholder.svg?height=100&width=150",
-}
 
 export default function PaymentPage() {
   const router = useRouter()
@@ -58,8 +41,88 @@ export default function PaymentPage() {
     postalCode: "",
     country: "TN",
   })
+  const [bookingDetails, setBookingDetails] = useState({
+    specialRequests: "",
+  })
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [saveCard, setSaveCard] = useState(false)
+  const [bookingData, setBookingData] = useState<any>(null)
+
+  useEffect(() => {
+    // Récupérer les données de réservation depuis les paramètres URL
+    const hotelId = searchParams.get("hotelId")
+    const roomId = searchParams.get("roomId")
+    const checkIn = searchParams.get("checkIn")
+    const checkOut = searchParams.get("checkOut")
+    const guests = searchParams.get("guests")
+
+    if (!hotelId || !roomId || !checkIn || !checkOut) {
+      addNotification({
+        type: "error",
+        title: "Données manquantes",
+        message: "Informations de réservation incomplètes",
+      })
+      router.push("/hotels")
+      return
+    }
+
+    // Simuler les données de réservation (en production, cela viendrait de l'API)
+    const mockBookingData = {
+      hotel: {
+        id: hotelId,
+        name: "Four Seasons Tunis",
+        location: "Gammarth",
+        image: "/placeholder.svg?height=100&width=150",
+      },
+      room: {
+        id: roomId,
+        name: "Suite Deluxe avec vue mer",
+        pricePerNight: 280,
+      },
+      checkIn,
+      checkOut,
+      guests: Number.parseInt(guests || "2"),
+      nights: Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)),
+    }
+
+    const totalRoomPrice = mockBookingData.room.pricePerNight * mockBookingData.nights
+    const taxes = Math.round(totalRoomPrice * 0.07) // 7% de taxes
+    const serviceFee = 35
+    const discount =
+      user?.loyaltyLevel === "GOLD"
+        ? Math.round(totalRoomPrice * 0.15)
+        : user?.loyaltyLevel === "SILVER"
+          ? Math.round(totalRoomPrice * 0.1)
+          : user?.loyaltyLevel === "BRONZE"
+            ? Math.round(totalRoomPrice * 0.05)
+            : 0
+
+    setBookingData({
+      ...mockBookingData,
+      totalRoomPrice,
+      taxes,
+      serviceFee,
+      discount,
+      total: totalRoomPrice + taxes + serviceFee - discount,
+    })
+  }, [searchParams, user, router, addNotification])
+
+  const validateCardNumber = (number: string) => {
+    const cleaned = number.replace(/\s/g, "")
+    return cleaned.length >= 13 && cleaned.length <= 19 && /^\d+$/.test(cleaned)
+  }
+
+  const validateExpiry = (expiry: string) => {
+    const [month, year] = expiry.split("/")
+    if (!month || !year) return false
+    const currentDate = new Date()
+    const expiryDate = new Date(2000 + Number.parseInt(year), Number.parseInt(month) - 1)
+    return expiryDate > currentDate
+  }
+
+  const validateCVV = (cvv: string) => {
+    return cvv.length >= 3 && cvv.length <= 4 && /^\d+$/.test(cvv)
+  }
 
   const handlePayment = async () => {
     if (!acceptTerms) {
@@ -71,21 +134,94 @@ export default function PaymentPage() {
       return
     }
 
+    if (paymentMethod === "card") {
+      if (!validateCardNumber(cardData.number)) {
+        addNotification({
+          type: "error",
+          title: "Numéro de carte invalide",
+          message: "Veuillez vérifier le numéro de votre carte",
+        })
+        return
+      }
+
+      if (!validateExpiry(cardData.expiry)) {
+        addNotification({
+          type: "error",
+          title: "Date d'expiration invalide",
+          message: "Veuillez vérifier la date d'expiration",
+        })
+        return
+      }
+
+      if (!validateCVV(cardData.cvv)) {
+        addNotification({
+          type: "error",
+          title: "CVV invalide",
+          message: "Veuillez vérifier le code CVV",
+        })
+        return
+      }
+    }
+
     setIsProcessing(true)
 
     try {
-      // Simulation du traitement du paiement
+      // Simuler l'appel API pour créer la réservation
+      const bookingPayload = {
+        hotelId: Number.parseInt(bookingData.hotel.id),
+        roomId: Number.parseInt(bookingData.room.id),
+        checkInDate: bookingData.checkIn,
+        checkOutDate: bookingData.checkOut,
+        guests: bookingData.guests,
+        specialRequests: bookingDetails.specialRequests,
+        guestName: `${billingData.firstName} ${billingData.lastName}`,
+        guestEmail: billingData.email,
+        guestPhone: billingData.phone,
+      }
+
+      // Essayer l'API backend d'abord
+      try {
+        const token = localStorage.getItem("tunisia_stay_token")
+        const response = await fetch("http://localhost:9000/api/bookings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(bookingPayload),
+        })
+
+        if (response.ok) {
+          const booking = await response.json()
+
+          // Simuler le traitement du paiement
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          addNotification({
+            type: "success",
+            title: "Paiement réussi !",
+            message: "Votre réservation a été confirmée",
+          })
+
+          router.push(`/booking-confirmation?id=${booking.bookingReference}`)
+          return
+        }
+      } catch (error) {
+        console.log("Backend not available, using demo mode")
+      }
+
+      // Fallback mode démo
       await new Promise((resolve) => setTimeout(resolve, 3000))
 
-      // Simulation de succès
+      const bookingReference = "TS-" + Math.random().toString(36).substr(2, 8).toUpperCase()
+
       addNotification({
         type: "success",
         title: "Paiement réussi !",
         message: "Votre réservation a été confirmée",
       })
 
-      // Redirection vers la confirmation
-      router.push("/booking-confirmation?id=TS-ABC12345")
+      router.push(`/booking-confirmation?id=${bookingReference}`)
     } catch (error) {
       addNotification({
         type: "error",
@@ -99,28 +235,61 @@ export default function PaymentPage() {
 
   const handlePayPal = async () => {
     setIsProcessing(true)
-    // Simulation PayPal
     await new Promise((resolve) => setTimeout(resolve, 2000))
+
     addNotification({
       type: "success",
       title: "Paiement PayPal réussi !",
       message: "Votre réservation a été confirmée",
     })
+
     setIsProcessing(false)
-    router.push("/booking-confirmation?id=TS-ABC12345")
+    router.push("/booking-confirmation?id=TS-PAYPAL123")
   }
 
   const handleStripe = async () => {
     setIsProcessing(true)
-    // Simulation Stripe
     await new Promise((resolve) => setTimeout(resolve, 2000))
+
     addNotification({
       type: "success",
       title: "Paiement Stripe réussi !",
       message: "Votre réservation a été confirmée",
     })
+
     setIsProcessing(false)
-    router.push("/booking-confirmation?id=TS-ABC12345")
+    router.push("/booking-confirmation?id=TS-STRIPE123")
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 text-center">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Connexion requise</h1>
+            <p className="text-gray-600 mb-4">Vous devez être connecté pour effectuer un paiement.</p>
+            <Button className="bg-red-600 hover:bg-red-700" onClick={() => router.push("/login")}>
+              Se connecter
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!bookingData) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement des données de réservation...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -205,7 +374,14 @@ export default function PaymentPage() {
                       id="cardNumber"
                       placeholder="1234 5678 9012 3456"
                       value={cardData.number}
-                      onChange={(e) => setCardData({ ...cardData, number: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value
+                          .replace(/\s/g, "")
+                          .replace(/(.{4})/g, "$1 ")
+                          .trim()
+                        setCardData({ ...cardData, number: value })
+                      }}
+                      maxLength={19}
                     />
                   </div>
 
@@ -226,7 +402,14 @@ export default function PaymentPage() {
                         id="expiry"
                         placeholder="MM/AA"
                         value={cardData.expiry}
-                        onChange={(e) => setCardData({ ...cardData, expiry: e.target.value })}
+                        onChange={(e) => {
+                          let value = e.target.value.replace(/\D/g, "")
+                          if (value.length >= 2) {
+                            value = value.substring(0, 2) + "/" + value.substring(2, 4)
+                          }
+                          setCardData({ ...cardData, expiry: value })
+                        }}
+                        maxLength={5}
                       />
                     </div>
                     <div className="space-y-2">
@@ -235,7 +418,11 @@ export default function PaymentPage() {
                         id="cvv"
                         placeholder="123"
                         value={cardData.cvv}
-                        onChange={(e) => setCardData({ ...cardData, cvv: e.target.value })}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "")
+                          setCardData({ ...cardData, cvv: value })
+                        }}
+                        maxLength={4}
                       />
                     </div>
                   </div>
@@ -325,6 +512,26 @@ export default function PaymentPage() {
               </CardContent>
             </Card>
 
+            {/* Demandes spéciales */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Demandes spéciales</CardTitle>
+                <CardDescription>Informations supplémentaires pour votre séjour</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Label htmlFor="specialRequests">Demandes spéciales (optionnel)</Label>
+                  <Textarea
+                    id="specialRequests"
+                    placeholder="Lit bébé, chambre non-fumeur, étage élevé, etc."
+                    value={bookingDetails.specialRequests}
+                    onChange={(e) => setBookingDetails({ ...bookingDetails, specialRequests: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Conditions */}
             <Card>
               <CardContent className="pt-6">
@@ -364,14 +571,14 @@ export default function PaymentPage() {
               <CardContent className="space-y-4">
                 <div className="flex space-x-4">
                   <img
-                    src={bookingData.image || "/placeholder.svg"}
-                    alt={bookingData.hotel}
+                    src={bookingData.hotel.image || "/placeholder.svg"}
+                    alt={bookingData.hotel.name}
                     className="w-20 h-16 object-cover rounded"
                   />
                   <div className="flex-1">
-                    <h3 className="font-semibold">{bookingData.hotel}</h3>
-                    <p className="text-sm text-gray-600">{bookingData.location}</p>
-                    <p className="text-sm text-gray-600">{bookingData.room}</p>
+                    <h3 className="font-semibold">{bookingData.hotel.name}</h3>
+                    <p className="text-sm text-gray-600">{bookingData.hotel.location}</p>
+                    <p className="text-sm text-gray-600">{bookingData.room.name}</p>
                   </div>
                 </div>
 
@@ -401,7 +608,7 @@ export default function PaymentPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>
-                      {bookingData.nights} nuits × {bookingData.roomPrice}€
+                      {bookingData.nights} nuits × {bookingData.room.pricePerNight}€
                     </span>
                     <span>{bookingData.totalRoomPrice}€</span>
                   </div>
@@ -415,7 +622,7 @@ export default function PaymentPage() {
                   </div>
                   {bookingData.discount > 0 && (
                     <div className="flex justify-between text-green-600">
-                      <span>Réduction fidélité</span>
+                      <span>Réduction fidélité ({user?.loyaltyLevel})</span>
                       <span>-{bookingData.discount}€</span>
                     </div>
                   )}
@@ -444,7 +651,10 @@ export default function PaymentPage() {
                       disabled={isProcessing || !acceptTerms}
                     >
                       {isProcessing ? (
-                        "Traitement en cours..."
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Traitement en cours...
+                        </>
                       ) : (
                         <>
                           <Lock className="h-4 w-4 mr-2" />
@@ -460,7 +670,14 @@ export default function PaymentPage() {
                       onClick={handlePayPal}
                       disabled={isProcessing || !acceptTerms}
                     >
-                      {isProcessing ? "Redirection PayPal..." : "Payer avec PayPal"}
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Redirection PayPal...
+                        </>
+                      ) : (
+                        "Payer avec PayPal"
+                      )}
                     </Button>
                   )}
 
@@ -470,7 +687,14 @@ export default function PaymentPage() {
                       onClick={handleStripe}
                       disabled={isProcessing || !acceptTerms}
                     >
-                      {isProcessing ? "Redirection Stripe..." : "Payer avec Stripe"}
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Redirection Stripe...
+                        </>
+                      ) : (
+                        "Payer avec Stripe"
+                      )}
                     </Button>
                   )}
                 </div>

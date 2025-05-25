@@ -1,11 +1,11 @@
 spring:
   application:
-    name: tunisia-stay-backend
+    name: TunisiaStay
   
   datasource:
-    url: jdbc:mysql://localhost:3306/tunisia_stay?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/hotelmanagementfinale
     username: root
-    password: password
+    password: Root
     driver-class-name: com.mysql.cj.jdbc.Driver
   
   jpa:
@@ -17,27 +17,19 @@ spring:
         dialect: org.hibernate.dialect.MySQL8Dialect
         format_sql: true
   
-  sql:
-    init:
-      mode: always
-      data-locations: classpath:data.sql
-  
   security:
     jwt:
-      secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      secret: Mysecret
       expiration: 86400000
 
 server:
-  port: 8080
+  port: 9000
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
+springdoc:
+  api-docs:
+    path: /ttt
+  swagger-ui:
+    path: /swagger-ui.html
 
 logging:
   level:

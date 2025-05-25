@@ -11,6 +11,7 @@ interface Notification {
   message: string
   isRead: boolean
   timestamp: Date
+  autoClose?: boolean
 }
 
 interface NotificationContextType {
@@ -25,33 +26,29 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: "1",
-      type: "info",
-      title: "Bienvenue sur TunisiaStay !",
-      message: "Découvrez nos offres exclusives et gagnez des points de fidélité.",
-      isRead: false,
-      timestamp: new Date(),
-    },
-    {
-      id: "2",
-      type: "success",
-      title: "Réservation confirmée",
-      message: "Votre réservation à l'Hôtel Laico Tunis a été confirmée.",
-      isRead: false,
-      timestamp: new Date(Date.now() - 3600000),
-    },
-  ])
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [toasts, setToasts] = useState<Notification[]>([])
 
   const addNotification = (notificationData: Omit<Notification, "id" | "isRead" | "timestamp">) => {
     const newNotification: Notification = {
       ...notificationData,
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       isRead: false,
       timestamp: new Date(),
+      autoClose: notificationData.autoClose !== false,
     }
+
     setNotifications((prev) => [newNotification, ...prev])
+
+    // Ajouter aux toasts pour affichage temporaire
+    setToasts((prev) => [newNotification, ...prev])
+
+    // Auto-remove toast après 5 secondes
+    if (newNotification.autoClose) {
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((toast) => toast.id !== newNotification.id))
+      }, 5000)
+    }
   }
 
   const markAsRead = (id: string) => {
@@ -60,10 +57,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const removeNotification = (id: string) => {
     setNotifications((prev) => prev.filter((notif) => notif.id !== id))
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
   }
 
   const clearAll = () => {
     setNotifications([])
+    setToasts([])
   }
 
   const unreadCount = notifications.filter((notif) => !notif.isRead).length
@@ -80,15 +79,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <NotificationToasts />
+      <NotificationToasts toasts={toasts} removeNotification={removeNotification} />
     </NotificationContext.Provider>
   )
 }
 
-function NotificationToasts() {
-  const { notifications, removeNotification } = useNotifications()
-  const recentNotifications = notifications.slice(0, 3)
-
+function NotificationToasts({
+  toasts,
+  removeNotification,
+}: {
+  toasts: Notification[]
+  removeNotification: (id: string) => void
+}) {
   const getIcon = (type: Notification["type"]) => {
     switch (type) {
       case "success":
@@ -116,11 +118,11 @@ function NotificationToasts() {
   }
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
-      {recentNotifications.map((notification) => (
+    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+      {toasts.slice(0, 3).map((notification) => (
         <div
           key={notification.id}
-          className={`max-w-sm p-4 rounded-lg border shadow-lg ${getBgColor(notification.type)} animate-in slide-in-from-right`}
+          className={`p-4 rounded-lg border shadow-lg ${getBgColor(notification.type)} animate-in slide-in-from-right duration-300`}
         >
           <div className="flex items-start">
             <div className="flex-shrink-0">{getIcon(notification.type)}</div>
@@ -131,7 +133,7 @@ function NotificationToasts() {
             <Button
               variant="ghost"
               size="sm"
-              className="ml-2 h-6 w-6 p-0"
+              className="ml-2 h-6 w-6 p-0 hover:bg-gray-200"
               onClick={() => removeNotification(notification.id)}
             >
               <X className="h-4 w-4" />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { User, Heart, Calendar, Settings, Award, Star, MapPin } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Navbar } from "../components/navbar"
 import { useAuth } from "../contexts/auth-context"
+import { useNotifications } from "../contexts/notification-context"
 
 const bookingHistory = [
   {
@@ -70,14 +71,14 @@ const favoriteHotels = [
 ]
 
 const loyaltyLevels = {
-  Bronze: { min: 0, max: 999, color: "orange", benefits: ["5% de réduction", "Check-in prioritaire"] },
-  Silver: {
+  BRONZE: { min: 0, max: 999, color: "orange", benefits: ["5% de réduction", "Check-in prioritaire"] },
+  SILVER: {
     min: 1000,
     max: 2499,
     color: "gray",
     benefits: ["10% de réduction", "Surclassement gratuit", "WiFi premium"],
   },
-  Gold: {
+  GOLD: {
     min: 2500,
     max: Number.POSITIVE_INFINITY,
     color: "yellow",
@@ -86,31 +87,80 @@ const loyaltyLevels = {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  const { addNotification } = useNotifications()
   const [activeTab, setActiveTab] = useState("profile")
   const [profileData, setProfileData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
+    name: "",
+    email: "",
     phone: "",
     bio: "",
     address: "",
   })
 
-  if (!user) {
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        bio: user.bio || "",
+        address: user.address || "",
+      })
+    }
+  }, [user])
+
+  const handleSaveProfile = () => {
+    addNotification({
+      type: "success",
+      title: "Profil mis à jour",
+      message: "Vos informations ont été sauvegardées avec succès",
+    })
+  }
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Accès refusé</h1>
-          <p className="text-gray-600">Vous devez être connecté pour accéder à cette page.</p>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement...</p>
+          </div>
         </div>
       </div>
     )
   }
 
-  const currentLevel = loyaltyLevels[user.loyaltyLevel]
-  const nextLevel = user.loyaltyLevel === "Bronze" ? "Silver" : user.loyaltyLevel === "Silver" ? "Gold" : null
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold mb-4 text-center">Accès au profil</h1>
+            <p className="text-gray-600 mb-4">Vous devez être connecté pour accéder à votre profil.</p>
+            <div className="bg-green-50 p-4 rounded-lg mb-4">
+              <h3 className="font-semibold text-green-800 mb-2">Comptes de test :</h3>
+              <div className="text-sm text-green-700 space-y-1">
+                <div>👤 user@tunisiastay.com / user123</div>
+                <div>🔧 admin@tunisiastay.com / admin123</div>
+                <div>⭐ sophie.martin@example.com / password123</div>
+              </div>
+            </div>
+            <Button className="w-full bg-red-600 hover:bg-red-700" onClick={() => (window.location.href = "/login")}>
+              Se connecter
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const currentLevel = loyaltyLevels[user.loyaltyLevel || "BRONZE"]
+  const nextLevel = user.loyaltyLevel === "BRONZE" ? "SILVER" : user.loyaltyLevel === "SILVER" ? "GOLD" : null
   const progressToNext = nextLevel
-    ? ((user.points - currentLevel.min) / (loyaltyLevels[nextLevel].min - currentLevel.min)) * 100
+    ? ((user.points! - currentLevel.min) / (loyaltyLevels[nextLevel].min - currentLevel.min)) * 100
     : 100
 
   return (
@@ -193,7 +243,9 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <Button className="bg-red-600 hover:bg-red-700">Sauvegarder les modifications</Button>
+                  <Button className="bg-red-600 hover:bg-red-700" onClick={handleSaveProfile}>
+                    Sauvegarder les modifications
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -210,9 +262,9 @@ export default function ProfilePage() {
 
                   <Badge
                     className={`mb-4 ${
-                      user.loyaltyLevel === "Gold"
+                      user.loyaltyLevel === "GOLD"
                         ? "bg-yellow-500"
-                        : user.loyaltyLevel === "Silver"
+                        : user.loyaltyLevel === "SILVER"
                           ? "bg-gray-500"
                           : "bg-orange-500"
                     }`}
@@ -356,9 +408,9 @@ export default function ProfilePage() {
                   <div className="text-center mb-6">
                     <div
                       className={`inline-flex items-center px-4 py-2 rounded-full text-white mb-4 ${
-                        user.loyaltyLevel === "Gold"
+                        user.loyaltyLevel === "GOLD"
                           ? "bg-yellow-500"
-                          : user.loyaltyLevel === "Silver"
+                          : user.loyaltyLevel === "SILVER"
                             ? "bg-gray-500"
                             : "bg-orange-500"
                       }`}
@@ -379,7 +431,7 @@ export default function ProfilePage() {
                       </div>
                       <Progress value={progressToNext} className="h-2" />
                       <div className="text-xs text-gray-500 mt-1">
-                        {loyaltyLevels[nextLevel].min - user.points} points restants
+                        {loyaltyLevels[nextLevel].min - user.points!} points restants
                       </div>
                     </div>
                   )}
@@ -411,7 +463,7 @@ export default function ProfilePage() {
                       <Badge variant="outline">500 points</Badge>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">Réduction de 10€ sur votre prochaine réservation</p>
-                    <Button variant="outline" size="sm" disabled={user.points < 500} className="w-full">
+                    <Button variant="outline" size="sm" disabled={user.points! < 500} className="w-full">
                       Échanger
                     </Button>
                   </div>
@@ -422,7 +474,7 @@ export default function ProfilePage() {
                       <Badge variant="outline">1000 points</Badge>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">Réduction de 25€ sur votre prochaine réservation</p>
-                    <Button variant="outline" size="sm" disabled={user.points < 1000} className="w-full">
+                    <Button variant="outline" size="sm" disabled={user.points! < 1000} className="w-full">
                       Échanger
                     </Button>
                   </div>
@@ -433,7 +485,7 @@ export default function ProfilePage() {
                       <Badge variant="outline">2500 points</Badge>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">Une nuit gratuite dans nos hôtels partenaires</p>
-                    <Button variant="outline" size="sm" disabled={user.points < 2500} className="w-full">
+                    <Button variant="outline" size="sm" disabled={user.points! < 2500} className="w-full">
                       Échanger
                     </Button>
                   </div>

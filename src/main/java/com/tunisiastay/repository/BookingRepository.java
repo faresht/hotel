@@ -22,6 +22,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     
     Page<Booking> findByStatusOrderByCreatedAtDesc(Booking.Status status, Pageable pageable);
     
+    Page<Booking> findByBookingReferenceContainingIgnoreCaseOrGuestNameContainingIgnoreCaseOrGuestEmailContainingIgnoreCase(
+        String reference, String name, String email, Pageable pageable);
+    
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED'")
     long countConfirmedBookings();
     
