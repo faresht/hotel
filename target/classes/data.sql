@@ -5,9 +5,8 @@ INSERT INTO users (name, email, password, phone, address, role, loyalty_level, p
 ('Ahmed Ben Ali', 'ahmed.benali@email.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '+216 25 789 123', 'Sousse, Tunisia', 'USER', 'SILVER', 1200, true, NOW(), NOW()),
 ('Marie Dubois', 'marie.dubois@email.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '+216 22 456 789', 'Hammamet, Tunisia', 'USER', 'BRONZE', 450, true, NOW(), NOW());
 
-
 -- Insert test hotels
-INSERT INTO hotels (name, location, address, description, category, rating, review_count, available, featured, phone, email, website, created_at, updated_at) VALUES
+INSERT INTO hotels (name, location, address, description, category, rating, review_count, available, featured, phone, email, created_at, updated_at) VALUES
 ('Hôtel Laico Tunis', 'Tunis Centre', 'Avenue Habib Bourguiba, Tunis 1000', 'Hôtel moderne au cœur de Tunis avec vue panoramique sur la ville et la méditerranée', 'FOUR_STARS', 4.5, 324, true, true, '+216 71 123 456', 'contact@laico-tunis.com', 'https://laico-tunis.com', NOW(), NOW()),
 ('Four Seasons Tunis', 'Gammarth', 'Zone Touristique Gammarth, 2078 La Marsa', 'Luxe et élégance face à la Méditerranée avec service exceptionnel', 'FIVE_STARS', 4.8, 156, true, true, '+216 71 910 910', 'reservations@fourseasons-tunis.com', 'https://fourseasons.com/tunis', NOW(), NOW()),
 ('Villa Didon', 'Sidi Bou Said', 'Rue Sidi Dhrif, Sidi Bou Said 2026', 'Villa de charme avec vue mer exceptionnelle dans le village pittoresque', 'LUXURY', 4.9, 89, true, true, '+216 71 740 411', 'info@villa-didon.com', 'https://villa-didon.com', NOW(), NOW()),
@@ -52,7 +51,6 @@ INSERT INTO rooms (name, room_number, description, type, price_per_night, capaci
 ('Chambre Resort', '701', 'Chambre tout inclus avec accès plage', 'STANDARD', 180.00, 3, 2, 'TWIN_BEDS', 30.0, true, true, false, false, true, 5, NOW(), NOW()),
 -- Riad Hammamet rooms
 ('Chambre Traditionnelle', '801', 'Chambre avec architecture traditionnelle tunisienne', 'STANDARD', 95.00, 2, 1, 'DOUBLE', 22.0, true, false, false, false, true, 6, NOW(), NOW());
-
 
 -- Insert room amenities
 INSERT INTO room_amenities (room_id, amenity) VALUES

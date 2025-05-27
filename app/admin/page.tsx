@@ -59,7 +59,7 @@ import { Progress } from "@/components/ui/progress"
 import { Navbar } from "../components/navbar"
 import { useAuth } from "../contexts/auth-context"
 import { useNotifications } from "../contexts/notification-context"
-import { apiClient } from "../lib/api"
+import { apiClient } from "@/lib/api"
 
 interface DashboardData {
   totalUsers: number

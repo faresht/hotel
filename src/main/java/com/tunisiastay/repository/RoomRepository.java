@@ -1,6 +1,7 @@
 package com.tunisiastay.repository;
 
 import com.tunisiastay.entity.Room;
+import com.tunisiastay.entity.RoomType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -37,5 +38,5 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
     @Query("SELECT MIN(r.pricePerNight) FROM Room r WHERE r.hotel.id = :hotelId AND r.available = true")
     BigDecimal findMinPriceByHotelId(@Param("hotelId") Long hotelId);
     
-    List<Room> findByTypeAndAvailableTrue(Room.RoomType type);
+    List<Room> findByTypeAndAvailableTrue(RoomType type);
 }

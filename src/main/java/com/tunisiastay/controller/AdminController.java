@@ -201,11 +201,10 @@ public class AdminController {
             hotel.setDescription(hotelDetails.getDescription());
             hotel.setCategory(hotelDetails.getCategory());
             hotel.setRating(hotelDetails.getRating());
-            hotel.setAvailable(hotelDetails.isAvailable());
-            hotel.setFeatured(hotelDetails.isFeatured());
+            hotel.setAvailable(hotelDetails.getAvailable());
+            hotel.setFeatured(hotelDetails.getFeatured());
             hotel.setPhone(hotelDetails.getPhone());
             hotel.setEmail(hotelDetails.getEmail());
-            hotel.setWebsite(hotelDetails.getWebsite());
             hotel.setUpdatedAt(LocalDateTime.now());
             
             Hotel savedHotel = hotelRepository.save(hotel);
@@ -230,7 +229,7 @@ public class AdminController {
         Optional<Hotel> optionalHotel = hotelRepository.findById(id);
         if (optionalHotel.isPresent()) {
             Hotel hotel = optionalHotel.get();
-            hotel.setAvailable(!hotel.isAvailable());
+            hotel.setAvailable(!hotel.getAvailable());
             hotel.setUpdatedAt(LocalDateTime.now());
             Hotel savedHotel = hotelRepository.save(hotel);
             return ResponseEntity.ok(savedHotel);
@@ -244,7 +243,7 @@ public class AdminController {
         Optional<Hotel> optionalHotel = hotelRepository.findById(id);
         if (optionalHotel.isPresent()) {
             Hotel hotel = optionalHotel.get();
-            hotel.setFeatured(!hotel.isFeatured());
+            hotel.setFeatured(!hotel.getFeatured());
             hotel.setUpdatedAt(LocalDateTime.now());
             Hotel savedHotel = hotelRepository.save(hotel);
             return ResponseEntity.ok(savedHotel);

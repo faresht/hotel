@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: TunisiaStay
+  
+  datasource:
+    url: jdbc:mysql://localhost:3306/hotelmanagementfinale
+    username: root
+    password: Root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+  
+  security:
+    jwt:
+      secret: Mysecret
+      expiration: 86400000
+
+server:
+  port: 9000
+
+springdoc:
+  api-docs:
+    path: /ttt
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.tunisiastay: DEBUG
+    org.springframework.security: DEBUG

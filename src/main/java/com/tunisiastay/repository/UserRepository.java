@@ -11,17 +11,19 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
-    
+
     Optional<User> findByEmail(String email);
-    
+
     boolean existsByEmail(String email);
-    
+
     @Query("SELECT COUNT(u) FROM User u WHERE u.role = 'USER'")
     long countUsers();
-    
+
     @Query("SELECT COUNT(u) FROM User u WHERE u.loyaltyLevel = :level")
     long countByLoyaltyLevel(User.LoyaltyLevel level);
-    
+
     Page<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(
-        String name, String email, Pageable pageable);
+            String name, String email, Pageable pageable);
+
+    String email(String email);
 }
