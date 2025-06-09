@@ -3,9 +3,9 @@ spring:
     name: TunisiaStay
   
   datasource:
-    url: jdbc:mysql://localhost:3306/hotelmanagementfinale
-    username: root
-    password: Root
+    url: jdbc:mysql://localhost:3306/tunisia_stay
+    username: tunisia_user
+    password: tunisia_pass
     driver-class-name: com.mysql.cj.jdbc.Driver
   
   jpa:
@@ -15,11 +15,11 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true
+        format_sql: false
   
   security:
     jwt:
-      secret: Mysecret
+      secret: d3e28ddcd1d5e15bbfdba68946556a844b1145e5b582c9bdf5c3106d498a216b781c27fdeb05d127fe9483125a9cb93d8d41be0c6b1edcaa1731bd535b21e45e5a70b96c945ec254f2c5b2ab6dc46f25825afd71f5c34e8859234e76cde73c8fd0a4cebcd498789557b08f9c8afbb5783395a584098b223e7ead854fd5dc9289f02b6a047494409c980a5a08330cafaf64c6b1ff539ba40f66f9db4aa1405bd54fefefa71f138c96e51ddbaf966fa612f9824fcff13220dd61bc5c09aedc186b8242bf87d5451c03a7db2ad6b305397cc5f3941dce8ed608bc479b91f30cf3601e2fdcd0e0a3864f5ad523d0ccad74ff00a958e525b01e3e5356a4b84367d80a
       expiration: 86400000
 
 server:

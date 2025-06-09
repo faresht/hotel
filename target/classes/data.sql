@@ -5,8 +5,9 @@ INSERT INTO users (name, email, password, phone, address, role, loyalty_level, p
 ('Ahmed Ben Ali', 'ahmed.benali@email.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '+216 25 789 123', 'Sousse, Tunisia', 'USER', 'SILVER', 1200, true, NOW(), NOW()),
 ('Marie Dubois', 'marie.dubois@email.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '+216 22 456 789', 'Hammamet, Tunisia', 'USER', 'BRONZE', 450, true, NOW(), NOW());
 
+
 -- Insert test hotels
-INSERT INTO hotels (name, location, address, description, category, rating, review_count, available, featured, phone, email, created_at, updated_at) VALUES
+INSERT INTO hotels (name, location, address, description, category, rating, review_count, available, featured, phone, email, website, created_at, updated_at) VALUES
 ('Hôtel Laico Tunis', 'Tunis Centre', 'Avenue Habib Bourguiba, Tunis 1000', 'Hôtel moderne au cœur de Tunis avec vue panoramique sur la ville et la méditerranée', 'FOUR_STARS', 4.5, 324, true, true, '+216 71 123 456', 'contact@laico-tunis.com', 'https://laico-tunis.com', NOW(), NOW()),
 ('Four Seasons Tunis', 'Gammarth', 'Zone Touristique Gammarth, 2078 La Marsa', 'Luxe et élégance face à la Méditerranée avec service exceptionnel', 'FIVE_STARS', 4.8, 156, true, true, '+216 71 910 910', 'reservations@fourseasons-tunis.com', 'https://fourseasons.com/tunis', NOW(), NOW()),
 ('Villa Didon', 'Sidi Bou Said', 'Rue Sidi Dhrif, Sidi Bou Said 2026', 'Villa de charme avec vue mer exceptionnelle dans le village pittoresque', 'LUXURY', 4.9, 89, true, true, '+216 71 740 411', 'info@villa-didon.com', 'https://villa-didon.com', NOW(), NOW()),
@@ -36,43 +37,26 @@ INSERT INTO hotel_images (hotel_id, image_url) VALUES
 (6, '/placeholder.svg?height=400&width=600&text=Riad+Hammamet+Courtyard');
 
 -- Insert rooms
-INSERT INTO rooms (name, room_number, description, type, price_per_night, capacity, bed_count, bed_type, size, available, has_balcony, has_sea_view, has_kitchen, has_bathroom, hotel_id, created_at, updated_at) VALUES
+INSERT INTO rooms (name, room_number, description, type, price_per_night, capacity, bed_count, bed_type, size, available, has_balcony, has_sea_view, has_kitchen, hotel_id, created_at, updated_at) VALUES
 -- Laico Tunis rooms
-('Chambre Standard', '101', 'Chambre confortable avec vue sur la ville', 'STANDARD', 120.00, 2, 1, 'DOUBLE', 25.0, true, false, false, false, true, 1, NOW(), NOW()),
-('Suite Deluxe', '201', 'Suite spacieuse avec balcon et vue panoramique', 'DELUXE', 180.00, 3, 1, 'KING', 40.0, true, true, false, false, true, 1, NOW(), NOW()),
+('Chambre Standard', '101', 'Chambre confortable avec vue sur la ville', 'SINGLE', 120.00, 2, 1, 'DOUBLE', 25.0, true, false, false, false, 1, NOW(), NOW()),
+('Suite Deluxe', '201', 'Suite spacieuse avec balcon et vue panoramique', 'DELUXE', 180.00, 3, 1, 'KING', 40.0, true, true, false, false, 1, NOW(), NOW()),
 -- Four Seasons rooms
-('Chambre Vue Mer', '301', 'Chambre luxueuse avec vue directe sur la mer', 'DELUXE', 280.00, 2, 1, 'KING', 35.0, true, true, true, false, true, 2, NOW(), NOW()),
-('Suite Présidentielle', '401', 'Suite présidentielle avec terrasse privée', 'PRESIDENTIAL_SUITE', 500.00, 4, 2, 'KING', 80.0, true, true, true, true, true, 2, NOW(), NOW()),
+('Chambre Vue Mer', '301', 'Chambre luxueuse avec vue directe sur la mer', 'DELUXE', 280.00, 2, 1, 'KING', 35.0, true, true, true, false, 2, NOW(), NOW()),
+('Suite Présidentielle', '401', 'Suite présidentielle avec terrasse privée', 'SUITE', 500.00, 4, 2, 'KING', 80.0, true, true, true, true, 2, NOW(), NOW()),
 -- Villa Didon rooms
-('Chambre Charme', '501', 'Chambre de charme avec décoration authentique', 'DELUXE', 350.00, 2, 1, 'QUEEN', 30.0, true, true, true, false, true, 3, NOW(), NOW()),
+('Chambre Charme', '501', 'Chambre de charme avec décoration authentique', 'DELUXE', 350.00, 2, 1, 'QUEEN', 30.0, true, true, true, false, 3, NOW(), NOW()),
 -- Bellevue rooms
-('Chambre Économique', '601', 'Chambre simple et confortable', 'STANDARD', 85.00, 2, 1, 'DOUBLE', 20.0, true, false, false, false, true, 4, NOW(), NOW()),
+('Chambre Économique', '601', 'Chambre simple et confortable', 'SINGLE', 85.00, 2, 1, 'DOUBLE', 20.0, true, false, false, false, 4, NOW(), NOW()),
 -- Resort Djerba rooms
-('Chambre Resort', '701', 'Chambre tout inclus avec accès plage', 'STANDARD', 180.00, 3, 2, 'TWIN_BEDS', 30.0, true, true, false, false, true, 5, NOW(), NOW()),
+('Chambre Resort', '701', 'Chambre tout inclus avec accès plage', 'DOUBLE', 180.00, 3, 2, 'TWIN_BEDS', 30.0, true, true, false, false, 5, NOW(), NOW()),
 -- Riad Hammamet rooms
-('Chambre Traditionnelle', '801', 'Chambre avec architecture traditionnelle tunisienne', 'STANDARD', 95.00, 2, 1, 'DOUBLE', 22.0, true, false, false, false, true, 6, NOW(), NOW());
+('Chambre Traditionnelle', '801', 'Chambre avec architecture traditionnelle tunisienne', 'FAMILY', 95.00, 2, 1, 'DOUBLE', 22.0, true, false, false, false, 6, NOW(), NOW());
 
--- Insert room amenities
-INSERT INTO room_amenities (room_id, amenity) VALUES
-(1, 'wifi'), (1, 'air-conditioning'), (1, 'tv'),
-(2, 'wifi'), (2, 'air-conditioning'), (2, 'tv'), (2, 'minibar'),
-(3, 'wifi'), (3, 'air-conditioning'), (3, 'tv'), (3, 'minibar'), (3, 'safe'),
-(4, 'wifi'), (4, 'air-conditioning'), (4, 'tv'), (4, 'minibar'), (4, 'safe'), (4, 'jacuzzi'),
-(5, 'wifi'), (5, 'air-conditioning'), (5, 'tv'), (5, 'minibar'),
-(6, 'wifi'), (6, 'air-conditioning'), (6, 'tv'),
-(7, 'wifi'), (7, 'air-conditioning'), (7, 'tv'), (7, 'minibar'),
-(8, 'wifi'), (8, 'air-conditioning'), (8, 'tv');
 
--- Insert room images
-INSERT INTO room_images (room_id, image_url) VALUES
-(1, '/placeholder.svg?height=300&width=400&text=Standard+Room'),
-(2, '/placeholder.svg?height=300&width=400&text=Deluxe+Suite'),
-(3, '/placeholder.svg?height=300&width=400&text=Sea+View+Room'),
-(4, '/placeholder.svg?height=300&width=400&text=Presidential+Suite'),
-(5, '/placeholder.svg?height=300&width=400&text=Charm+Room'),
-(6, '/placeholder.svg?height=300&width=400&text=Economic+Room'),
-(7, '/placeholder.svg?height=300&width=400&text=Resort+Room'),
-(8, '/placeholder.svg?height=300&width=400&text=Traditional+Room');
+-- Room amenities and images are not supported in the current entity model
+-- If you need to add these features, update the Room entity class with @ElementCollection annotations
+-- similar to how it's done in the Hotel entity class
 
 -- Insert sample bookings
 INSERT INTO bookings (booking_reference, check_in_date, check_out_date, nights, guests, total_amount, original_price, discount_amount, status, payment_status, special_requests, guest_name, guest_email, guest_phone, user_id, hotel_id, room_id, created_at, updated_at) VALUES

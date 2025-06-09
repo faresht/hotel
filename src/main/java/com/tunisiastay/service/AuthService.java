@@ -11,6 +11,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.sql.Date;
+import java.time.Instant;
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -36,6 +40,7 @@ public class AuthService {
                 .loyaltyLevel(User.LoyaltyLevel.BRONZE)
                 .points(100) // Points de bienvenue
                 .enabled(true)
+                .createdAt(LocalDateTime.now())
                 .build();
         
         var savedUser = userRepository.save(user);

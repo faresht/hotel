@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Calendar,
   Users,
+  Loader,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,8 +37,10 @@ import { Navbar } from "../components/navbar"
 import { Footer } from "../components/footer"
 import { useAuth } from "../contexts/auth-context"
 import { useNotifications } from "../contexts/notification-context"
+import { apiClient } from "@/lib/api"
 
-const hotels = [
+// Fallback data in case API is not available
+const fallbackHotels = [
   {
     id: 1,
     name: "Hôtel Laico Tunis",
@@ -48,7 +51,7 @@ const hotels = [
     reviews: 324,
     image: "/placeholder.svg?height=200&width=300",
     amenities: ["wifi", "parking", "restaurant", "pool"],
-    category: "4-stars",
+    category: "FOUR_STARS",
     available: true,
     description: "Hôtel moderne au cœur de Tunis avec vue panoramique",
     rooms: [
@@ -66,7 +69,7 @@ const hotels = [
     reviews: 156,
     image: "/placeholder.svg?height=200&width=300",
     amenities: ["wifi", "beach", "spa", "golf"],
-    category: "5-stars",
+    category: "FIVE_STARS",
     available: true,
     description: "Luxe et élégance face à la Méditerranée",
     rooms: [
@@ -84,7 +87,7 @@ const hotels = [
     reviews: 89,
     image: "/placeholder.svg?height=200&width=300",
     amenities: ["wifi", "sea-view", "spa", "restaurant"],
-    category: "luxury",
+    category: "LUXURY",
     available: true,
     description: "Villa de charme avec vue mer exceptionnelle",
     rooms: [
@@ -102,7 +105,7 @@ const hotels = [
     reviews: 267,
     image: "/placeholder.svg?height=200&width=300",
     amenities: ["wifi", "pool", "restaurant"],
-    category: "3-stars",
+    category: "THREE_STARS",
     available: true,
     description: "Confort et convivialité au centre de Sousse",
     rooms: [
@@ -120,7 +123,7 @@ const hotels = [
     reviews: 445,
     image: "/placeholder.svg?height=200&width=300",
     amenities: ["wifi", "beach", "pool", "spa"],
-    category: "4-stars",
+    category: "FOUR_STARS",
     available: true,
     description: "Resort tout inclus sur la plage de Djerba",
     rooms: [
@@ -138,7 +141,7 @@ const hotels = [
     reviews: 198,
     image: "/placeholder.svg?height=200&width=300",
     amenities: ["wifi", "pool", "spa"],
-    category: "boutique",
+    category: "BOUTIQUE",
     available: true,
     description: "Riad authentique dans la médina de Hammamet",
     rooms: [
@@ -191,46 +194,74 @@ export default function HotelsPage() {
     selectedRoom: null as any,
   })
 
+  // State for price prediction
+  const [predictedPrices, setPredictedPrices] = useState<Record<number, number>>({})
+  const [loadingPredictions, setLoadingPredictions] = useState<Record<number, boolean>>({})
+  const [predictionErrors, setPredictionErrors] = useState<Record<number, string>>({})
+
+  // API state
+  const [hotels, setHotels] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [apiConnected, setApiConnected] = useState(false)
+
+  // Fetch hotels from API
   useEffect(() => {
-    // Charger les favoris depuis le localStorage
+    const fetchHotels = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // Test API connection
+        const connectionTest = await apiClient.testConnection()
+        setApiConnected(connectionTest.success)
+
+        if (connectionTest.success) {
+          // Fetch featured hotels from API
+          const response = await apiClient.getFeaturedHotels()
+          setHotels(response || [])
+        } else {
+          // Use fallback data if API is not connected
+          console.log("API not connected, using fallback data")
+          setHotels(fallbackHotels)
+        }
+      } catch (err) {
+        console.error("Error fetching hotels:", err)
+        setError("Impossible de charger les hôtels. Utilisation des données de démonstration.")
+        setHotels(fallbackHotels)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchHotels()
+  }, [])
+
+  // Load favorites from localStorage
+  useEffect(() => {
     const savedFavorites = localStorage.getItem("tunisia_stay_favorites")
     if (savedFavorites) {
       setFavorites(JSON.parse(savedFavorites))
     }
   }, [])
 
+  // Filter hotels locally for amenities and availability
+  // Most other filtering is done on the server side
   const filteredAndSortedHotels = useMemo(() => {
-    const filtered = hotels.filter((hotel) => {
-      const matchesSearch =
-        hotel.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        hotel.location.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesPrice = hotel.price >= priceRange[0] && hotel.price <= priceRange[1]
-      const matchesCategory = selectedCategory === "all" || hotel.category === selectedCategory
+    if (!hotels || hotels.length === 0) return []
+
+    return hotels.filter((hotel) => {
+      // Filter by amenities (not handled by API)
       const matchesAmenities =
-        selectedAmenities.length === 0 || selectedAmenities.every((amenity) => hotel.amenities.includes(amenity))
+        selectedAmenities.length === 0 || 
+        selectedAmenities.every((amenity) => hotel.amenities && hotel.amenities.includes(amenity))
+
+      // Filter by availability (may be handled by API)
       const matchesAvailability = !showAvailableOnly || hotel.available
 
-      return matchesSearch && matchesPrice && matchesCategory && matchesAmenities && matchesAvailability
+      return matchesAmenities && matchesAvailability
     })
-
-    // Tri
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "price-low":
-          return a.price - b.price
-        case "price-high":
-          return b.price - a.price
-        case "rating":
-          return b.rating - a.rating
-        case "reviews":
-          return b.reviews - a.reviews
-        default:
-          return 0
-      }
-    })
-
-    return filtered
-  }, [searchTerm, priceRange, selectedCategory, selectedAmenities, sortBy, showAvailableOnly])
+  }, [hotels, selectedAmenities, showAvailableOnly])
 
   const toggleFavorite = (hotelId: number) => {
     const newFavorites = favorites.includes(hotelId)
@@ -266,6 +297,36 @@ export default function HotelsPage() {
 
   const handleRoomSelection = (room: any) => {
     setBookingData({ ...bookingData, selectedRoom: room })
+  }
+
+  const getPredictedPrice = async (roomId: number) => {
+    if (loadingPredictions[roomId]) return
+
+    setLoadingPredictions(prev => ({ ...prev, [roomId]: true }))
+    setPredictionErrors(prev => ({ ...prev, [roomId]: "" }))
+
+    try {
+      if (!apiConnected) {
+        // Simulate API call in demo mode with a random price adjustment
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        const room = selectedHotel.rooms.find((r: any) => r.id === roomId)
+        if (room) {
+          const basePrice = room.price
+          const adjustment = (Math.random() * 0.3) - 0.15 // -15% to +15%
+          const predictedPrice = Math.round(basePrice * (1 + adjustment))
+          setPredictedPrices(prev => ({ ...prev, [roomId]: predictedPrice }))
+        }
+      } else {
+        // Real API call
+        const response = await apiClient.predictRoomPrice(roomId)
+        setPredictedPrices(prev => ({ ...prev, [roomId]: response.predictedPrice }))
+      }
+    } catch (err) {
+      console.error("Error predicting price:", err)
+      setPredictionErrors(prev => ({ ...prev, [roomId]: "Erreur lors de la prédiction" }))
+    } finally {
+      setLoadingPredictions(prev => ({ ...prev, [roomId]: false }))
+    }
   }
 
   const proceedToPayment = () => {
@@ -466,6 +527,39 @@ export default function HotelsPage() {
 
           {/* Liste des hôtels */}
           <div className="flex-1">
+            {/* Loading indicator */}
+            {loading && (
+              <div className="flex justify-center items-center py-12">
+                <Loader className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2 text-lg">Chargement des hôtels...</span>
+              </div>
+            )}
+
+            {/* Error message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+                <p>{error}</p>
+                {!apiConnected && (
+                  <p className="text-sm mt-2">
+                    Le serveur API n'est pas accessible. Les données affichées sont des exemples.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* API status indicator */}
+            {!loading && apiConnected && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-6">
+                <p>✅ Connecté à l'API - Affichage des données en temps réel</p>
+              </div>
+            )}
+
+            {!loading && !apiConnected && !error && (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-6">
+                <p>⚠️ Mode démo - Affichage des données d'exemple</p>
+              </div>
+            )}
+
             <div className="grid gap-6">
               {filteredAndSortedHotels.map((hotel) => (
                 <Card key={hotel.id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -659,6 +753,54 @@ export default function HotelsPage() {
                               <Badge variant="destructive" className="mt-1">
                                 Indisponible
                               </Badge>
+                            )}
+
+                            {/* AI Price Prediction */}
+                            {room.available && (
+                              <div className="mt-2">
+                                {predictedPrices[room.id] ? (
+                                  <div className="flex flex-col items-end">
+                                    <div className="text-sm text-gray-600">Prix suggéré par IA:</div>
+                                    <div className={`text-sm font-medium ${
+                                      predictedPrices[room.id] > room.price 
+                                        ? 'text-red-600' 
+                                        : 'text-blue-600'
+                                    }`}>
+                                      {predictedPrices[room.id]}€
+                                      {predictedPrices[room.id] > room.price 
+                                        ? ' ↑' 
+                                        : predictedPrices[room.id] < room.price 
+                                          ? ' ↓' 
+                                          : ''}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="text-xs mt-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      getPredictedPrice(room.id);
+                                    }}
+                                    disabled={loadingPredictions[room.id]}
+                                  >
+                                    {loadingPredictions[room.id] ? (
+                                      <>
+                                        <Loader className="h-3 w-3 mr-1 animate-spin" />
+                                        Prédiction...
+                                      </>
+                                    ) : (
+                                      "Prédire prix optimal"
+                                    )}
+                                  </Button>
+                                )}
+                                {predictionErrors[room.id] && (
+                                  <div className="text-xs text-red-500 mt-1">
+                                    {predictionErrors[room.id]}
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

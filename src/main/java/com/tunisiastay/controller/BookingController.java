@@ -2,6 +2,8 @@ package com.tunisiastay.controller;
 
 import com.tunisiastay.dto.BookingRequest;
 import com.tunisiastay.entity.Booking;
+import com.tunisiastay.entity.User;
+import com.tunisiastay.repository.UserRepository;
 import com.tunisiastay.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -14,6 +16,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -22,9 +25,10 @@ import java.util.List;
 @SecurityRequirement(name = "bearerAuth")
 @CrossOrigin(origins = "*")
 public class BookingController {
-    
+
     private final BookingService bookingService;
-    
+    private final UserRepository userRepository;
+
     @PostMapping
     @Operation(summary = "Create a new booking")
     public ResponseEntity<Booking> createBooking(
@@ -34,7 +38,7 @@ public class BookingController {
         Long userId = getUserIdFromEmail(userDetails.getUsername());
         return ResponseEntity.ok(bookingService.createBooking(request, userId));
     }
-    
+
     @GetMapping
     @Operation(summary = "Get user bookings")
     public ResponseEntity<List<Booking>> getUserBookings(Authentication authentication) {
@@ -42,7 +46,7 @@ public class BookingController {
         Long userId = getUserIdFromEmail(userDetails.getUsername());
         return ResponseEntity.ok(bookingService.getUserBookings(userId));
     }
-    
+
     @GetMapping("/{id}")
     @Operation(summary = "Get booking by ID")
     public ResponseEntity<Booking> getBookingById(
@@ -52,13 +56,13 @@ public class BookingController {
         Long userId = getUserIdFromEmail(userDetails.getUsername());
         return ResponseEntity.ok(bookingService.getBookingById(id, userId));
     }
-    
+
     @PutMapping("/{id}/confirm")
     @Operation(summary = "Confirm booking")
     public ResponseEntity<Booking> confirmBooking(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.confirmBooking(id));
     }
-    
+
     @PutMapping("/{id}/cancel")
     @Operation(summary = "Cancel booking")
     public ResponseEntity<Booking> cancelBooking(
@@ -68,10 +72,10 @@ public class BookingController {
         Long userId = getUserIdFromEmail(userDetails.getUsername());
         return ResponseEntity.ok(bookingService.cancelBooking(id, userId));
     }
-    
+
     private Long getUserIdFromEmail(String email) {
-        // This would typically be injected as a service
-        // For now, we'll assume the email maps to user ID
-        return 1L; // Placeholder - should be implemented properly
+        Optional<User> userOptional = userRepository.findByEmail(email);
+        return userOptional.map(User::getId)
+                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
     }
 }

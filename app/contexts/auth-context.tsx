@@ -130,7 +130,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Essayer d'abord avec l'API réelle
+      // For admin account, always try to use the real API
+      if (email === "admin@tunisiastay.com") {
+        try {
+          const response = await apiClient.login(email, password)
+          setUser(response.user)
+          localStorage.setItem("tunisia_stay_user", JSON.stringify(response.user))
+          return true
+        } catch (apiError) {
+          console.error("Failed to login admin with API:", apiError)
+          throw new Error("Admin login requires a connection to the backend API")
+        }
+      }
+
+      // For non-admin accounts, try API first then fallback to demo
       try {
         const response = await apiClient.login(email, password)
         setUser(response.user)
@@ -140,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("API non disponible, utilisation des comptes de démonstration")
       }
 
-      // Fallback vers les comptes de démonstration
+      // Fallback vers les comptes de démonstration (only for non-admin accounts)
       const demoUser = demoUsers.find((u) => u.email === email)
 
       if (demoUser) {
@@ -170,13 +183,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (data: any): Promise<boolean> => {
     try {
-      // Essayer d'abord avec l'API réelle
+      // Always try to use the real API for registration
       try {
         const response = await apiClient.register(data)
         setUser(response.user)
         localStorage.setItem("tunisia_stay_user", JSON.stringify(response.user))
         return true
       } catch (apiError) {
+        // Only allow demo registration if not trying to create an admin account
+        if (data.email?.includes("admin")) {
+          console.error("Admin registration requires a connection to the backend API")
+          throw new Error("Admin registration requires a connection to the backend API")
+        }
         console.log("API non disponible, création d'un compte de démonstration")
       }
 

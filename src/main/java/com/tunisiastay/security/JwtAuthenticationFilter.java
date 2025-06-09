@@ -17,46 +17,75 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-@Component
-@RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    
-    private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
-    
-    @Override
-    protected void doFilterInternal(
-            @NonNull HttpServletRequest request,
-            @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain
-    ) throws ServletException, IOException {
-        
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
-        
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+    @Component
+    @RequiredArgsConstructor
+    public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+        private final JwtService jwtService;
+        private final UserDetailsService userDetailsService;
+
+        @Override
+        protected void doFilterInternal(
+                @NonNull HttpServletRequest request,
+                @NonNull HttpServletResponse response,
+                @NonNull FilterChain filterChain
+        ) throws ServletException, IOException {
+
+            final String authHeader = request.getHeader("Authorization");
+
+            // Skip filter for public endpoints
+            if (isPublicEndpoint(request)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            final String jwt = authHeader.substring(7);
+
+            try {
+                final String userEmail = jwtService.extractUsername(jwt);
+
+                if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+
+                    if (jwtService.isTokenValid(jwt, userDetails)) {
+                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    } else {
+                        sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED, "Invalid JWT token");
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                sendErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED, "JWT validation error");
+                return;
+            }
+
             filterChain.doFilter(request, response);
-            return;
         }
-        
-        jwt = authHeader.substring(7);
-        userEmail = jwtService.extractUsername(jwt);
-        
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
-            
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+
+        private boolean isPublicEndpoint(HttpServletRequest request) {
+            String path = request.getServletPath();
+            return path.startsWith("/api/auth/") ||
+                    path.startsWith("/api/hotels/") ||
+                    path.startsWith("/ttt/") ||
+                    path.startsWith("/swagger-ui/") ||
+                    path.equals("/swagger-ui.html");
+        }
+
+        private void sendErrorResponse(HttpServletResponse response, int status, String message) throws IOException {
+            if (!response.isCommitted()) {
+                response.sendError(status, message);
             }
         }
-        
-        filterChain.doFilter(request, response);
-    }
+
 }

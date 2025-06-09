@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Navbar } from "../components/navbar"
 import { useAuth } from "../contexts/auth-context"
 import { useNotifications } from "../contexts/notification-context"
+import { apiClient } from "@/lib/api"
 
 export default function PaymentPage() {
   const router = useRouter()
@@ -47,8 +48,41 @@ export default function PaymentPage() {
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [saveCard, setSaveCard] = useState(false)
   const [bookingData, setBookingData] = useState<any>(null)
+  const [isDemoMode, setIsDemoMode] = useState(false)
 
   useEffect(() => {
+    // Check if API is available to determine if we're in demo mode
+    const checkApiAvailability = async () => {
+      const connectionTest = await apiClient.testConnection()
+      const isDemo = !connectionTest.success
+      setIsDemoMode(isDemo)
+
+      // Auto-accept terms and fill dummy data in demo mode for smoother experience
+      if (isDemo) {
+        setAcceptTerms(true)
+
+        // Set dummy card data for demo mode
+        setCardData({
+          number: "4111 1111 1111 1111",
+          expiry: "12/25",
+          cvv: "123",
+          name: "Demo User"
+        })
+
+        // Set dummy billing data if not already filled
+        if (!billingData.phone) {
+          setBillingData({
+            ...billingData,
+            phone: "+216 71 123 456",
+            address: "123 Demo Street",
+            city: "Tunis",
+            postalCode: "1000"
+          })
+        }
+      }
+    }
+    checkApiAvailability()
+
     // Récupérer les données de réservation depuis les paramètres URL
     const hotelId = searchParams.get("hotelId")
     const roomId = searchParams.get("roomId")
@@ -125,48 +159,51 @@ export default function PaymentPage() {
   }
 
   const handlePayment = async () => {
-    if (!acceptTerms) {
-      addNotification({
-        type: "error",
-        title: "Erreur",
-        message: "Vous devez accepter les conditions générales",
-      })
-      return
-    }
-
-    if (paymentMethod === "card") {
-      if (!validateCardNumber(cardData.number)) {
+    // Skip validation in demo mode
+    if (!isDemoMode) {
+      if (!acceptTerms) {
         addNotification({
           type: "error",
-          title: "Numéro de carte invalide",
-          message: "Veuillez vérifier le numéro de votre carte",
+          title: "Erreur",
+          message: "Vous devez accepter les conditions générales",
         })
         return
       }
 
-      if (!validateExpiry(cardData.expiry)) {
-        addNotification({
-          type: "error",
-          title: "Date d'expiration invalide",
-          message: "Veuillez vérifier la date d'expiration",
-        })
-        return
-      }
+      if (paymentMethod === "card") {
+        if (!validateCardNumber(cardData.number)) {
+          addNotification({
+            type: "error",
+            title: "Numéro de carte invalide",
+            message: "Veuillez vérifier le numéro de votre carte",
+          })
+          return
+        }
 
-      if (!validateCVV(cardData.cvv)) {
-        addNotification({
-          type: "error",
-          title: "CVV invalide",
-          message: "Veuillez vérifier le code CVV",
-        })
-        return
+        if (!validateExpiry(cardData.expiry)) {
+          addNotification({
+            type: "error",
+            title: "Date d'expiration invalide",
+            message: "Veuillez vérifier la date d'expiration",
+          })
+          return
+        }
+
+        if (!validateCVV(cardData.cvv)) {
+          addNotification({
+            type: "error",
+            title: "CVV invalide",
+            message: "Veuillez vérifier le code CVV",
+          })
+          return
+        }
       }
     }
 
     setIsProcessing(true)
 
     try {
-      // Simuler l'appel API pour créer la réservation
+      // Préparer les données de réservation
       const bookingPayload = {
         hotelId: Number.parseInt(bookingData.hotel.id),
         roomId: Number.parseInt(bookingData.room.id),
@@ -179,8 +216,10 @@ export default function PaymentPage() {
         guestPhone: billingData.phone,
       }
 
-      // Essayer l'API backend d'abord
-      try {
+      let booking;
+
+      if (!isDemoMode) {
+        // API is available, make the real API call
         const token = localStorage.getItem("tunisia_stay_token")
         const response = await fetch("http://localhost:9000/api/bookings", {
           method: "POST",
@@ -191,42 +230,63 @@ export default function PaymentPage() {
           body: JSON.stringify(bookingPayload),
         })
 
-        if (response.ok) {
-          const booking = await response.json()
+        if (!response.ok) {
+          // Si la réponse n'est pas OK, essayer de récupérer le message d'erreur
+          let errorMessage = "Une erreur est survenue lors de la création de la réservation."
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.message || errorMessage;
+            }
+          } catch (e) {
+            // Si on ne peut pas parser le JSON, utiliser le message par défaut
+            console.error("Error parsing error response:", e);
+          }
 
-          // Simuler le traitement du paiement
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-
-          addNotification({
-            type: "success",
-            title: "Paiement réussi !",
-            message: "Votre réservation a été confirmée",
-          })
-
-          router.push(`/booking-confirmation?id=${booking.bookingReference}`)
-          return
+          throw new Error(errorMessage)
         }
-      } catch (error) {
-        console.log("Backend not available, using demo mode")
+
+        // Réservation créée avec succès
+        try {
+          const responseText = await response.text();
+          booking = responseText ? JSON.parse(responseText) : { bookingReference: 'DEMO-' + Math.floor(Math.random() * 1000000) };
+        } catch (e) {
+          console.error("Error parsing booking response:", e);
+          // Use a fallback booking reference for demo purposes
+          booking = { bookingReference: 'DEMO-' + Math.floor(Math.random() * 1000000) };
+        }
+      } else {
+        // API is not available, use demo mode
+        console.log("API not connected, using demo mode for booking");
+        // Create a demo booking reference
+        booking = { 
+          bookingReference: 'DEMO-' + Math.floor(Math.random() * 1000000),
+          status: 'CONFIRMED',
+          createdAt: new Date().toISOString()
+        };
       }
 
-      // Fallback mode démo
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      // Simuler le traitement du paiement
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      const bookingReference = "TS-" + Math.random().toString(36).substr(2, 8).toUpperCase()
-
+      // Notification de succès
       addNotification({
         type: "success",
         title: "Paiement réussi !",
         message: "Votre réservation a été confirmée",
       })
 
-      router.push(`/booking-confirmation?id=${bookingReference}`)
+      // Redirection vers la page de confirmation
+      router.push(`/booking-confirmation?id=${booking.bookingReference}`)
     } catch (error) {
+      console.error("Error during booking process:", error)
+
+      // Notification d'erreur
       addNotification({
         type: "error",
-        title: "Erreur de paiement",
-        message: "Une erreur est survenue lors du traitement",
+        title: "Erreur de réservation",
+        message: error.message || "Impossible de créer la réservation. Veuillez réessayer plus tard.",
       })
     } finally {
       setIsProcessing(false)
@@ -234,31 +294,211 @@ export default function PaymentPage() {
   }
 
   const handlePayPal = async () => {
+    // Skip validation in demo mode
+    if (!isDemoMode && !acceptTerms) {
+      addNotification({
+        type: "error",
+        title: "Erreur",
+        message: "Vous devez accepter les conditions générales",
+      })
+      return
+    }
+
     setIsProcessing(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    addNotification({
-      type: "success",
-      title: "Paiement PayPal réussi !",
-      message: "Votre réservation a été confirmée",
-    })
+    try {
+      // Préparer les données de réservation
+      const bookingPayload = {
+        hotelId: Number.parseInt(bookingData.hotel.id),
+        roomId: Number.parseInt(bookingData.room.id),
+        checkInDate: bookingData.checkIn,
+        checkOutDate: bookingData.checkOut,
+        guests: bookingData.guests,
+        specialRequests: bookingDetails.specialRequests,
+        guestName: `${billingData.firstName} ${billingData.lastName}`,
+        guestEmail: billingData.email,
+        guestPhone: billingData.phone,
+      }
 
-    setIsProcessing(false)
-    router.push("/booking-confirmation?id=TS-PAYPAL123")
+      let booking;
+
+      if (!isDemoMode) {
+        // API is available, make the real API call
+        const token = localStorage.getItem("tunisia_stay_token")
+        const response = await fetch("http://localhost:9000/api/bookings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(bookingPayload),
+        })
+
+        if (!response.ok) {
+          // Si la réponse n'est pas OK, essayer de récupérer le message d'erreur
+          let errorMessage = "Une erreur est survenue lors de la création de la réservation."
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.message || errorMessage;
+            }
+          } catch (e) {
+            // Si on ne peut pas parser le JSON, utiliser le message par défaut
+            console.error("Error parsing error response:", e);
+          }
+
+          throw new Error(errorMessage)
+        }
+
+        // Réservation créée avec succès
+        try {
+          const responseText = await response.text();
+          booking = responseText ? JSON.parse(responseText) : { bookingReference: 'PAYPAL-' + Math.floor(Math.random() * 1000000) };
+        } catch (e) {
+          console.error("Error parsing PayPal booking response:", e);
+          // Use a fallback booking reference for demo purposes
+          booking = { bookingReference: 'PAYPAL-' + Math.floor(Math.random() * 1000000) };
+        }
+      } else {
+        // API is not available, use demo mode
+        console.log("API not connected, using demo mode for PayPal booking");
+        // Create a demo booking reference
+        booking = { 
+          bookingReference: 'PAYPAL-' + Math.floor(Math.random() * 1000000),
+          status: 'CONFIRMED',
+          createdAt: new Date().toISOString()
+        };
+      }
+
+      // Simuler le traitement du paiement PayPal
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Notification de succès
+      addNotification({
+        type: "success",
+        title: "Paiement PayPal réussi !",
+        message: "Votre réservation a été confirmée",
+      })
+
+      // Redirection vers la page de confirmation
+      router.push(`/booking-confirmation?id=${booking.bookingReference}`)
+    } catch (error) {
+      console.error("Error during PayPal booking process:", error)
+
+      // Notification d'erreur
+      addNotification({
+        type: "error",
+        title: "Erreur de réservation",
+        message: error.message || "Impossible de créer la réservation. Veuillez réessayer plus tard.",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleStripe = async () => {
+    // Skip validation in demo mode
+    if (!isDemoMode && !acceptTerms) {
+      addNotification({
+        type: "error",
+        title: "Erreur",
+        message: "Vous devez accepter les conditions générales",
+      })
+      return
+    }
+
     setIsProcessing(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    addNotification({
-      type: "success",
-      title: "Paiement Stripe réussi !",
-      message: "Votre réservation a été confirmée",
-    })
+    try {
+      // Préparer les données de réservation
+      const bookingPayload = {
+        hotelId: Number.parseInt(bookingData.hotel.id),
+        roomId: Number.parseInt(bookingData.room.id),
+        checkInDate: bookingData.checkIn,
+        checkOutDate: bookingData.checkOut,
+        guests: bookingData.guests,
+        specialRequests: bookingDetails.specialRequests,
+        guestName: `${billingData.firstName} ${billingData.lastName}`,
+        guestEmail: billingData.email,
+        guestPhone: billingData.phone,
+      }
 
-    setIsProcessing(false)
-    router.push("/booking-confirmation?id=TS-STRIPE123")
+      let booking;
+
+      if (!isDemoMode) {
+        // API is available, make the real API call
+        const token = localStorage.getItem("tunisia_stay_token")
+        const response = await fetch("http://localhost:9000/api/bookings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(bookingPayload),
+        })
+
+        if (!response.ok) {
+          // Si la réponse n'est pas OK, essayer de récupérer le message d'erreur
+          let errorMessage = "Une erreur est survenue lors de la création de la réservation."
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.message || errorMessage;
+            }
+          } catch (e) {
+            // Si on ne peut pas parser le JSON, utiliser le message par défaut
+            console.error("Error parsing error response:", e);
+          }
+
+          throw new Error(errorMessage)
+        }
+
+        // Réservation créée avec succès
+        try {
+          const responseText = await response.text();
+          booking = responseText ? JSON.parse(responseText) : { bookingReference: 'STRIPE-' + Math.floor(Math.random() * 1000000) };
+        } catch (e) {
+          console.error("Error parsing Stripe booking response:", e);
+          // Use a fallback booking reference for demo purposes
+          booking = { bookingReference: 'STRIPE-' + Math.floor(Math.random() * 1000000) };
+        }
+      } else {
+        // API is not available, use demo mode
+        console.log("API not connected, using demo mode for Stripe booking");
+        // Create a demo booking reference
+        booking = { 
+          bookingReference: 'STRIPE-' + Math.floor(Math.random() * 1000000),
+          status: 'CONFIRMED',
+          createdAt: new Date().toISOString()
+        };
+      }
+
+      // Simuler le traitement du paiement Stripe
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Notification de succès
+      addNotification({
+        type: "success",
+        title: "Paiement Stripe réussi !",
+        message: "Votre réservation a été confirmée",
+      })
+
+      // Redirection vers la page de confirmation
+      router.push(`/booking-confirmation?id=${booking.bookingReference}`)
+    } catch (error) {
+      console.error("Error during Stripe booking process:", error)
+
+      // Notification d'erreur
+      addNotification({
+        type: "error",
+        title: "Erreur de réservation",
+        message: error.message || "Impossible de créer la réservation. Veuillez réessayer plus tard.",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   if (!user) {
@@ -297,6 +537,18 @@ export default function PaymentPage() {
       <Navbar />
 
       <div className="container mx-auto px-4 py-8">
+        {isDemoMode && (
+          <Alert className="mb-4 bg-blue-50 border-blue-200 text-blue-800">
+            <div className="flex items-center">
+              <Shield className="h-5 w-5 mr-2" />
+              <div>
+                <p className="font-medium">Mode Démonstration</p>
+                <p className="text-sm">Le paiement est simulé et aucune transaction réelle ne sera effectuée.</p>
+              </div>
+            </div>
+          </Alert>
+        )}
+
         <div className="mb-6">
           <Button variant="ghost" onClick={() => router.back()} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -648,7 +900,7 @@ export default function PaymentPage() {
                     <Button
                       className="w-full bg-blue-600 hover:bg-blue-700"
                       onClick={handlePayment}
-                      disabled={isProcessing || !acceptTerms}
+                      disabled={isProcessing || (!acceptTerms && !isDemoMode)}
                     >
                       {isProcessing ? (
                         <>
@@ -668,7 +920,7 @@ export default function PaymentPage() {
                     <Button
                       className="w-full bg-yellow-500 hover:bg-yellow-600"
                       onClick={handlePayPal}
-                      disabled={isProcessing || !acceptTerms}
+                      disabled={isProcessing || (!acceptTerms && !isDemoMode)}
                     >
                       {isProcessing ? (
                         <>
@@ -685,7 +937,7 @@ export default function PaymentPage() {
                     <Button
                       className="w-full bg-purple-600 hover:bg-purple-700"
                       onClick={handleStripe}
-                      disabled={isProcessing || !acceptTerms}
+                      disabled={isProcessing || (!acceptTerms && !isDemoMode)}
                     >
                       {isProcessing ? (
                         <>

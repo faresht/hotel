@@ -1,6 +1,7 @@
 -- Vider les tables existantes
-DELETE FROM room_images;
-DELETE FROM room_amenities;
+-- Room amenities and images are not supported in the current entity model
+-- DELETE FROM room_images;
+-- DELETE FROM room_amenities;
 DELETE FROM hotel_images;
 DELETE FROM hotel_amenities;
 DELETE FROM notifications;
@@ -50,7 +51,7 @@ BEGIN
     DECLARE user_address VARCHAR(200);
     DECLARE loyalty_level ENUM('BRONZE', 'SILVER', 'GOLD');
     DECLARE points INT;
-    
+
     WHILE i <= 1000 DO
         SET user_name = CONCAT('Utilisateur ', i);
         SET user_email = CONCAT('user', i, '@tunisiastay.com');
@@ -62,13 +63,14 @@ BEGIN
             WHEN 'SILVER' THEN FLOOR(RAND() * 2000) + 1000
             WHEN 'GOLD' THEN FLOOR(RAND() * 3000) + 2000
         END;
-        
+
         INSERT INTO users (name, email, password, phone, address, role, loyalty_level, points, enabled, created_at, updated_at) 
         VALUES (user_name, user_email, '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', user_phone, user_address, 'USER', loyalty_level, points, true, DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 365) DAY), NOW());
-        
+
         SET i = i + 1;
     END WHILE;
-END //
+END;
+//
 DELIMITER ;
 
 CALL GenerateUsers();
@@ -98,7 +100,7 @@ BEGIN
     DECLARE is_featured BOOLEAN;
     DECLARE hotel_phone VARCHAR(20);
     DECLARE hotel_email VARCHAR(100);
-    
+
     WHILE i <= 200 DO
         SET hotel_name = CONCAT('Hôtel ', ELT(FLOOR(RAND() * 20) + 1, 'Royal', 'Palace', 'Grand', 'Luxury', 'Premium', 'Elite', 'Golden', 'Diamond', 'Pearl', 'Sapphire', 'Emerald', 'Crystal', 'Majestic', 'Imperial', 'Regal', 'Noble', 'Supreme', 'Prestige', 'Excellence', 'Splendor'), ' ', ELT(FLOOR(RAND() * 15) + 1, 'Tunis', 'Sousse', 'Sfax', 'Monastir', 'Hammamet', 'Djerba', 'Tozeur', 'Bizerte', 'Kairouan', 'Mahdia', 'Nabeul', 'Gabès', 'Gafsa', 'Kasserine', 'Siliana'));
         SET hotel_location = ELT(FLOOR(RAND() * 15) + 1, 'Tunis Centre', 'Gammarth', 'Sidi Bou Said', 'Sousse', 'Djerba', 'Hammamet', 'Tozeur', 'Bizerte', 'Kairouan', 'Mahdia', 'Nabeul', 'Sfax', 'Monastir', 'Gabès', 'Douz');
@@ -110,13 +112,14 @@ BEGIN
         SET is_featured = RAND() > 0.7;
         SET hotel_phone = CONCAT('+216 ', LPAD(FLOOR(RAND() * 100000000), 8, '0'));
         SET hotel_email = CONCAT('contact@hotel', i, '.tn');
-        
+
         INSERT INTO hotels (name, location, address, description, category, rating, review_count, available, featured, phone, email, website, created_at, updated_at) 
         VALUES (hotel_name, hotel_location, hotel_address, hotel_description, hotel_category, hotel_rating, review_count, true, is_featured, hotel_phone, hotel_email, CONCAT('https://hotel', i, '.tn'), DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 730) DAY), NOW());
-        
+
         SET i = i + 1;
     END WHILE;
-END //
+END;
+//
 DELIMITER ;
 
 CALL GenerateHotels();
@@ -157,7 +160,7 @@ BEGIN
     DECLARE room_name VARCHAR(100);
     DECLARE room_number VARCHAR(10);
     DECLARE room_description TEXT;
-    DECLARE room_type ENUM('STANDARD', 'DELUXE', 'SUITE', 'PRESIDENTIAL_SUITE');
+    DECLARE room_type ENUM('SINGLE', 'DOUBLE', 'SUITE', 'FAMILY', 'DELUXE');
     DECLARE price DECIMAL(10,2);
     DECLARE capacity INT;
     DECLARE bed_count INT;
@@ -168,39 +171,42 @@ BEGIN
     DECLARE has_kitchen BOOLEAN;
     DECLARE rooms_per_hotel INT;
     DECLARE room_counter INT;
-    
+
     -- Pour chaque hôtel, créer entre 15 et 40 chambres
     hotel_loop: LOOP
         SELECT id INTO hotel_id FROM hotels WHERE id = i;
         IF hotel_id IS NULL THEN
             LEAVE hotel_loop;
         END IF;
-        
+
         SET rooms_per_hotel = FLOOR(RAND() * 26) + 15; -- Entre 15 et 40 chambres
         SET room_counter = 1;
-        
+
         room_loop: WHILE room_counter <= rooms_per_hotel DO
             SET room_number = CONCAT(i, LPAD(room_counter, 2, '0'));
-            SET room_type = ELT(FLOOR(RAND() * 4) + 1, 'STANDARD', 'DELUXE', 'SUITE', 'PRESIDENTIAL_SUITE');
+            SET room_type = ELT(FLOOR(RAND() * 5) + 1, 'SINGLE', 'DOUBLE', 'SUITE', 'FAMILY', 'DELUXE');
             SET room_name = CONCAT('Chambre ', 
                 CASE room_type
-                    WHEN 'STANDARD' THEN 'Standard'
-                    WHEN 'DELUXE' THEN 'Deluxe'
+                    WHEN 'SINGLE' THEN 'Simple'
+                    WHEN 'DOUBLE' THEN 'Double'
                     WHEN 'SUITE' THEN 'Suite'
-                    WHEN 'PRESIDENTIAL_SUITE' THEN 'Suite Présidentielle'
+                    WHEN 'FAMILY' THEN 'Familiale'
+                    WHEN 'DELUXE' THEN 'Deluxe'
                 END);
             SET room_description = CONCAT('Belle chambre ', LOWER(room_name), ' avec tout le confort moderne.');
             SET price = CASE room_type
-                WHEN 'STANDARD' THEN ROUND(50 + (RAND() * 100), 2)
-                WHEN 'DELUXE' THEN ROUND(120 + (RAND() * 150), 2)
+                WHEN 'SINGLE' THEN ROUND(50 + (RAND() * 100), 2)
+                WHEN 'DOUBLE' THEN ROUND(80 + (RAND() * 120), 2)
                 WHEN 'SUITE' THEN ROUND(250 + (RAND() * 200), 2)
-                WHEN 'PRESIDENTIAL_SUITE' THEN ROUND(400 + (RAND() * 300), 2)
+                WHEN 'FAMILY' THEN ROUND(180 + (RAND() * 150), 2)
+                WHEN 'DELUXE' THEN ROUND(300 + (RAND() * 200), 2)
             END;
             SET capacity = CASE room_type
-                WHEN 'STANDARD' THEN FLOOR(RAND() * 2) + 2
+                WHEN 'SINGLE' THEN 1
+                WHEN 'DOUBLE' THEN 2
+                WHEN 'SUITE' THEN FLOOR(RAND() * 2) + 3
+                WHEN 'FAMILY' THEN FLOOR(RAND() * 2) + 4
                 WHEN 'DELUXE' THEN FLOOR(RAND() * 2) + 2
-                WHEN 'SUITE' THEN FLOOR(RAND() * 3) + 3
-                WHEN 'PRESIDENTIAL_SUITE' THEN FLOOR(RAND() * 4) + 4
             END;
             SET bed_count = CASE 
                 WHEN capacity <= 2 THEN 1
@@ -209,21 +215,22 @@ BEGIN
             END;
             SET bed_type = ELT(FLOOR(RAND() * 5) + 1, 'SINGLE', 'DOUBLE', 'QUEEN', 'KING', 'TWIN_BEDS');
             SET room_size = CASE room_type
-                WHEN 'STANDARD' THEN ROUND(15 + (RAND() * 15), 1)
-                WHEN 'DELUXE' THEN ROUND(25 + (RAND() * 20), 1)
+                WHEN 'SINGLE' THEN ROUND(15 + (RAND() * 10), 1)
+                WHEN 'DOUBLE' THEN ROUND(20 + (RAND() * 15), 1)
                 WHEN 'SUITE' THEN ROUND(40 + (RAND() * 30), 1)
-                WHEN 'PRESIDENTIAL_SUITE' THEN ROUND(60 + (RAND() * 40), 1)
+                WHEN 'FAMILY' THEN ROUND(35 + (RAND() * 25), 1)
+                WHEN 'DELUXE' THEN ROUND(30 + (RAND() * 20), 1)
             END;
             SET has_balcony = RAND() > 0.4;
             SET has_sea_view = RAND() > 0.6;
-            SET has_kitchen = room_type IN ('SUITE', 'PRESIDENTIAL_SUITE') AND RAND() > 0.5;
-            
-            INSERT INTO rooms (name, room_number, description, type, price_per_night, capacity, bed_count, bed_type, size, available, has_balcony, has_sea_view, has_kitchen, has_bathroom, hotel_id, created_at, updated_at)
-            VALUES (room_name, room_number, room_description, room_type, price, capacity, bed_count, bed_type, room_size, RAND() > 0.1, has_balcony, has_sea_view, has_kitchen, true, hotel_id, DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 365) DAY), NOW());
-            
+            SET has_kitchen = room_type IN ('SUITE', 'FAMILY', 'DELUXE') AND RAND() > 0.5;
+
+            INSERT INTO rooms (name, room_number, description, type, price_per_night, capacity, bed_count, bed_type, size, available, has_balcony, has_sea_view, has_kitchen, hotel_id, created_at, updated_at)
+            VALUES (room_name, room_number, room_description, room_type, price, capacity, bed_count, bed_type, room_size, RAND() > 0.1, has_balcony, has_sea_view, has_kitchen, hotel_id, DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 365) DAY), NOW());
+
             SET room_counter = room_counter + 1;
         END WHILE room_loop;
-        
+
         SET i = i + 1;
         IF i > 200 THEN
             LEAVE hotel_loop;
@@ -235,25 +242,29 @@ DELIMITER ;
 CALL GenerateRooms();
 DROP PROCEDURE GenerateRooms;
 
--- Insérer des équipements pour toutes les chambres
-INSERT INTO room_amenities (room_id, amenity)
-SELECT id, 'wifi' FROM rooms;
-
-INSERT INTO room_amenities (room_id, amenity)
-SELECT id, 'air-conditioning' FROM rooms WHERE RAND() > 0.1;
-
-INSERT INTO room_amenities (room_id, amenity)
-SELECT id, 'tv' FROM rooms WHERE RAND() > 0.2;
-
-INSERT INTO room_amenities (room_id, amenity)
-SELECT id, 'minibar' FROM rooms WHERE type IN ('DELUXE', 'SUITE', 'PRESIDENTIAL_SUITE') AND RAND() > 0.3;
-
-INSERT INTO room_amenities (room_id, amenity)
-SELECT id, 'safe' FROM rooms WHERE type IN ('SUITE', 'PRESIDENTIAL_SUITE') AND RAND() > 0.4;
-
--- Insérer des images pour toutes les chambres
-INSERT INTO room_images (room_id, image_url)
-SELECT id, CONCAT('/placeholder.svg?height=300&width=400&text=Room+', id) FROM rooms;
+-- Room amenities and images are not supported in the current entity model
+-- If you need to add these features, update the Room entity class with @ElementCollection annotations
+-- similar to how it's done in the Hotel entity class
+--
+-- Example of how to add room amenities and images once the Room entity is updated:
+--
+-- INSERT INTO room_amenities (room_id, amenity)
+-- SELECT id, 'wifi' FROM rooms;
+--
+-- INSERT INTO room_amenities (room_id, amenity)
+-- SELECT id, 'air-conditioning' FROM rooms WHERE RAND() > 0.1;
+--
+-- INSERT INTO room_amenities (room_id, amenity)
+-- SELECT id, 'tv' FROM rooms WHERE RAND() > 0.2;
+--
+-- INSERT INTO room_amenities (room_id, amenity)
+-- SELECT id, 'minibar' FROM rooms WHERE type IN ('DELUXE', 'SUITE') AND RAND() > 0.3;
+--
+-- INSERT INTO room_amenities (room_id, amenity)
+-- SELECT id, 'safe' FROM rooms WHERE type IN ('SUITE', 'DELUXE') AND RAND() > 0.4;
+--
+-- INSERT INTO room_images (room_id, image_url)
+-- SELECT id, CONCAT('/placeholder.svg?height=300&width=400&text=Room+', id) FROM rooms;
 
 -- Procédure pour générer des réservations (10000 réservations)
 DELIMITER //
@@ -277,27 +288,27 @@ BEGIN
     DECLARE guest_name VARCHAR(100);
     DECLARE guest_email VARCHAR(100);
     DECLARE guest_phone VARCHAR(20);
-    
+
     WHILE i <= 10000 DO
         -- Sélectionner un utilisateur aléatoire
         SELECT id, name, email, phone INTO user_id, guest_name, guest_email, guest_phone 
         FROM users WHERE role = 'USER' ORDER BY RAND() LIMIT 1;
-        
+
         -- Sélectionner une chambre disponible aléatoire
         SELECT r.id, r.hotel_id, r.price_per_night, r.capacity 
         INTO room_id, hotel_id, room_price, guests
         FROM rooms r WHERE r.available = true ORDER BY RAND() LIMIT 1;
-        
+
         -- Générer des dates aléatoires
         SET check_in = DATE_ADD(CURDATE(), INTERVAL FLOOR(RAND() * 365) - 180 DAY);
         SET nights = FLOOR(RAND() * 10) + 1;
         SET check_out = DATE_ADD(check_in, INTERVAL nights DAY);
-        
+
         -- Calculer les prix
         SET original_price = room_price * nights;
         SET discount_amount = original_price * (RAND() * 0.2); -- Jusqu'à 20% de réduction
         SET total_amount = original_price - discount_amount;
-        
+
         -- Statuts aléatoires
         SET booking_status = ELT(FLOOR(RAND() * 4) + 1, 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED');
         SET payment_status = CASE booking_status
@@ -306,15 +317,15 @@ BEGIN
             WHEN 'CANCELLED' THEN ELT(FLOOR(RAND() * 2) + 1, 'REFUNDED', 'FAILED')
             ELSE 'PENDING'
         END;
-        
+
         SET booking_ref = CONCAT('TS-', UPPER(SUBSTRING(MD5(RAND()), 1, 8)));
-        
+
         INSERT INTO bookings (booking_reference, check_in_date, check_out_date, nights, guests, total_amount, original_price, discount_amount, status, payment_status, special_requests, guest_name, guest_email, guest_phone, user_id, hotel_id, room_id, created_at, updated_at)
         VALUES (booking_ref, check_in, check_out, nights, guests, total_amount, original_price, discount_amount, booking_status, payment_status, 
                 CASE WHEN RAND() > 0.7 THEN ELT(FLOOR(RAND() * 5) + 1, 'Vue sur mer', 'Étage élevé', 'Lit king size', 'Arrivée tardive', 'Chambre calme') ELSE NULL END,
                 guest_name, guest_email, guest_phone, user_id, hotel_id, room_id, 
                 DATE_SUB(check_in, INTERVAL FLOOR(RAND() * 30) DAY), NOW());
-        
+
         SET i = i + 1;
     END WHILE;
 END //
@@ -338,7 +349,7 @@ BEGIN
     DECLARE service_rating INT;
     DECLARE location_rating INT;
     DECLARE value_rating INT;
-    
+
     WHILE i <= 5000 DO
         -- Sélectionner une réservation confirmée ou terminée
         SELECT b.id, b.user_id, b.hotel_id 
@@ -347,31 +358,31 @@ BEGIN
         WHERE b.status IN ('CONFIRMED', 'COMPLETED') 
         AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)
         ORDER BY RAND() LIMIT 1;
-        
+
         IF booking_id IS NOT NULL THEN
             SET rating = FLOOR(RAND() * 5) + 1;
             SET cleanliness_rating = FLOOR(RAND() * 5) + 1;
             SET service_rating = FLOOR(RAND() * 5) + 1;
             SET location_rating = FLOOR(RAND() * 5) + 1;
             SET value_rating = FLOOR(RAND() * 5) + 1;
-            
+
             SET review_title = CASE 
                 WHEN rating >= 4 THEN ELT(FLOOR(RAND() * 5) + 1, 'Excellent séjour', 'Très satisfait', 'Je recommande', 'Parfait', 'Magnifique expérience')
                 WHEN rating = 3 THEN ELT(FLOOR(RAND() * 3) + 1, 'Correct', 'Séjour moyen', 'Peut mieux faire')
                 ELSE ELT(FLOOR(RAND() * 3) + 1, 'Décevant', 'Pas terrible', 'À éviter')
             END;
-            
+
             SET review_comment = CASE 
                 WHEN rating >= 4 THEN 'Très bon hôtel avec un excellent service. Je recommande vivement cet établissement pour un séjour réussi.'
                 WHEN rating = 3 THEN 'Hôtel correct dans l''ensemble. Quelques points à améliorer mais globalement satisfaisant.'
                 ELSE 'Séjour décevant. L''hôtel ne correspond pas aux attentes et le service laisse à désirer.'
             END;
-            
+
             INSERT INTO reviews (rating, title, comment, cleanliness_rating, service_rating, location_rating, value_rating, verified, user_id, hotel_id, booking_id, created_at, updated_at)
             VALUES (rating, review_title, review_comment, cleanliness_rating, service_rating, location_rating, value_rating, true, user_id, hotel_id, booking_id, 
                     DATE_ADD((SELECT created_at FROM bookings WHERE id = booking_id), INTERVAL FLOOR(RAND() * 30) DAY), NOW());
         END IF;
-        
+
         SET i = i + 1;
     END WHILE;
 END //
@@ -402,25 +413,25 @@ BEGIN
     DECLARE notif_message TEXT;
     DECLARE notif_type ENUM('INFO', 'SUCCESS', 'WARNING', 'ERROR');
     DECLARE is_read BOOLEAN;
-    
+
     WHILE i <= 3000 DO
         SELECT id INTO user_id FROM users WHERE role = 'USER' ORDER BY RAND() LIMIT 1;
-        
+
         SET notif_type = ELT(FLOOR(RAND() * 4) + 1, 'INFO', 'SUCCESS', 'WARNING', 'ERROR');
         SET is_read = RAND() > 0.3;
-        
+
         SET notif_title = CASE notif_type
             WHEN 'INFO' THEN ELT(FLOOR(RAND() * 3) + 1, 'Nouvelle offre disponible', 'Mise à jour de votre profil', 'Newsletter TunisiaStay')
             WHEN 'SUCCESS' THEN ELT(FLOOR(RAND() * 3) + 1, 'Réservation confirmée', 'Paiement réussi', 'Points de fidélité ajoutés')
             WHEN 'WARNING' THEN ELT(FLOOR(RAND() * 3) + 1, 'Réservation en attente', 'Vérification requise', 'Offre limitée')
             WHEN 'ERROR' THEN ELT(FLOOR(RAND() * 3) + 1, 'Problème de paiement', 'Réservation annulée', 'Erreur système')
         END;
-        
+
         SET notif_message = CONCAT('Message de notification automatique pour ', notif_title, '. Consultez votre compte pour plus de détails.');
-        
+
         INSERT INTO notifications (title, message, type, is_read, user_id, created_at)
         VALUES (notif_title, notif_message, notif_type, is_read, user_id, DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 90) DAY));
-        
+
         SET i = i + 1;
     END WHILE;
 END //

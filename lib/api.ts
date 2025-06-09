@@ -1,4 +1,9 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api"
+// Set the API base URL based on the environment
+// Always use localhost:9000 for local development unless explicitly overridden by env var
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api";
+
+// For local development: "http://localhost:9000/api"
+// For Docker environments: "http://backend:8080/api"
 
 class ApiClient {
   private baseURL: string
@@ -35,6 +40,8 @@ class ApiClient {
 
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`
+      console.log(this.token);
+      console.log(this.baseURL)
     }
 
     try {
@@ -243,12 +250,13 @@ class ApiClient {
     return this.request<{ content: any[]; totalElements: number }>(`/admin/hotels?${params}`)
   }
 
-  async getAllRooms(page = 0, size = 10, search?: string, hotelId?: number) {
+  async getAllRooms(page = 0, size = 10, search?: string, roomType?: string, hotelId?: number) {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
     })
     if (search) params.append("search", search)
+    if (roomType && roomType !== "ALL") params.append("roomType", roomType)
     if (hotelId) params.append("hotelId", hotelId.toString())
 
     return this.request<{ content: any[]; totalElements: number }>(`/admin/rooms?${params}`)
@@ -376,6 +384,14 @@ class ApiClient {
     })
   }
 
+  // Ollama Room Price Prediction
+  async predictRoomPrice(roomId: number) {
+    return this.request<{
+      roomId: number
+      predictedPrice: number
+    }>(`/hotels/rooms/${roomId}/predict-price`)
+  }
+
   async getSeasonalTrends(hotelId?: number) {
     const params = hotelId ? `?hotelId=${hotelId}` : ""
     return this.request<any>(`/admin/ai/seasonal-trends${params}`)
@@ -385,21 +401,47 @@ class ApiClient {
     return this.request<any>("/admin/ai/market-analysis")
   }
 
+  async getRevenueByMonth() {
+    return this.request<any[]>("/admin/stats/revenue-by-month")
+  }
+
   // Méthode pour tester la connexion API
   async testConnection() {
     try {
-      const response = await fetch(`${this.baseURL}/health`, {
+      // First try the health endpoint
+      try {
+        const response = await fetch(`${this.baseURL}/health`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+        if (response.ok) {
+          return {
+            success: true,
+            status: response.status,
+            contentType: response.headers.get("content-type"),
+          }
+        }
+      } catch (healthError) {
+        console.log("Health endpoint not available, trying alternative endpoint")
+      }
+
+      // If health endpoint fails, try the hotels endpoint as a fallback
+      const hotelsResponse = await fetch(`${this.baseURL}/hotels/featured`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
       })
+
       return {
-        success: response.ok,
-        status: response.status,
-        contentType: response.headers.get("content-type"),
+        success: hotelsResponse.ok,
+        status: hotelsResponse.status,
+        contentType: hotelsResponse.headers.get("content-type"),
       }
     } catch (error) {
+      console.error("API connection test failed:", error)
       return {
         success: false,
         error: error.message,

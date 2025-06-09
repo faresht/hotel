@@ -45,7 +45,7 @@ export interface PaymentResponse {
 // Service de paiement
 export class PaymentService {
   private static instance: PaymentService
-  private apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"
+  private apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000/api"
 
   static getInstance(): PaymentService {
     if (!PaymentService.instance) {

@@ -1,5 +1,6 @@
 package com.tunisiastay.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -60,6 +61,11 @@ public class Room {
 
     @ManyToOne
     @JoinColumn(name = "hotel_id")
+    @JsonIgnore
     private Hotel hotel;
+
+    public String getHotelName() {
+        return hotel != null ? hotel.getName() : null;
+    }
 
 }

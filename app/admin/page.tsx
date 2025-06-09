@@ -56,6 +56,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Navbar } from "../components/navbar"
 import { useAuth } from "../contexts/auth-context"
 import { useNotifications } from "../contexts/notification-context"
@@ -233,6 +235,7 @@ export default function AdminPage() {
     content: [],
     totalElements: 0,
   })
+  const [monthlyStats, setMonthlyStats] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(0)
@@ -264,22 +267,56 @@ export default function AdminPage() {
       try {
         // Tester la connexion API
         const connectionTest = await apiClient.testConnection()
+        console.log("API Connection test result:", connectionTest)
         setIsConnectedToAPI(connectionTest.success)
 
         if (connectionTest.success) {
           // Charger les vraies données depuis l'API
-          await loadDashboardData()
-          if (activeTab === "users") await loadUsersData()
-          if (activeTab === "hotels") await loadHotelsData()
-          if (activeTab === "rooms") await loadRoomsData()
-          if (activeTab === "bookings") await loadBookingsData()
+          try {
+            await loadDashboardData()
+            if (activeTab === "users") await loadUsersData()
+            if (activeTab === "hotels") await loadHotelsData()
+            if (activeTab === "rooms") await loadRoomsData()
+            if (activeTab === "bookings") await loadBookingsData()
+          } catch (apiError) {
+            console.error("Error loading data from API:", apiError)
+            // Only fall back to demo data if not admin or if explicitly allowed
+            if (user.role !== "ADMIN") {
+              loadDemoData()
+            } else {
+              // For admin users, show the error instead of falling back to demo data
+              addNotification({
+                type: "error",
+                title: "Erreur de connexion API",
+                message: "Impossible de charger les données depuis l'API. Veuillez vérifier votre connexion au backend.",
+              })
+            }
+          }
         } else {
-          // Utiliser des données de démonstration
-          loadDemoData()
+          // Only fall back to demo data if not admin or if explicitly allowed
+          if (user.role !== "ADMIN") {
+            loadDemoData()
+          } else {
+            // For admin users, show the error instead of falling back to demo data
+            addNotification({
+              type: "error",
+              title: "Erreur de connexion API",
+              message: "Impossible de se connecter à l'API. Veuillez vérifier que le backend est en cours d'exécution.",
+            })
+          }
         }
       } catch (error) {
         console.error("Erreur lors du chargement des données:", error)
-        loadDemoData()
+        // Only fall back to demo data if not admin
+        if (user.role !== "ADMIN") {
+          loadDemoData()
+        } else {
+          addNotification({
+            type: "error",
+            title: "Erreur",
+            message: "Une erreur s'est produite lors du chargement des données.",
+          })
+        }
       } finally {
         setDataLoading(false)
       }
@@ -294,9 +331,24 @@ export default function AdminPage() {
     try {
       const data = await apiClient.getAdminDashboard()
       setDashboardData(data)
+
+      // Load monthly statistics
+      await loadMonthlyStats()
     } catch (error) {
       console.error("Erreur lors du chargement du dashboard:", error)
       loadDemoDashboard()
+    }
+  }
+
+  const loadMonthlyStats = async () => {
+    try {
+      const data = await apiClient.getRevenueByMonth()
+      console.log("Monthly stats data:", data)
+      setMonthlyStats(data)
+    } catch (error) {
+      console.error("Erreur lors du chargement des statistiques mensuelles:", error)
+      // Fall back to demo data
+      setMonthlyStats(monthlyData)
     }
   }
 
@@ -313,7 +365,34 @@ export default function AdminPage() {
   const loadHotelsData = async () => {
     try {
       const data = await apiClient.getAllHotels(currentPage, pageSize, searchTerm, sortBy, sortDir)
-      setHotels(data)
+      console.log("Hotel data received:", data)
+
+      // Handle both array response format and pageable response format
+      if (Array.isArray(data)) {
+        // API is returning an array of hotels
+        setHotels({
+          content: data,
+          totalElements: data.length
+        })
+      } else if (data && data.content) {
+        // API is returning a pageable object with content property
+        setHotels(data)
+      } else if (data && data.length === undefined) {
+        // API might be returning a different format, try to adapt
+        const hotelArray = Object.values(data).filter(item => 
+          typeof item === 'object' && item !== null && 'id' in item
+        )
+        setHotels({
+          content: hotelArray,
+          totalElements: hotelArray.length
+        })
+      } else {
+        // Fallback to empty state
+        setHotels({
+          content: [],
+          totalElements: 0
+        })
+      }
     } catch (error) {
       console.error("Erreur lors du chargement des hôtels:", error)
       loadDemoHotels()
@@ -322,12 +401,17 @@ export default function AdminPage() {
 
   const loadRoomsData = async () => {
     try {
-      const data = await apiClient.getAllRooms(currentPage, pageSize, searchTerm)
+      const data = await apiClient.getAllRooms(currentPage, pageSize, searchTerm, selectedFilter)
+      console.log(data);
       setRooms(data)
     } catch (error) {
       console.error("Erreur lors du chargement des chambres:", error)
       loadDemoRooms()
     }
+  }
+
+  const fetchRooms = () => {
+    loadRoomsData()
   }
 
   const loadBookingsData = async () => {
@@ -532,6 +616,101 @@ export default function AdminPage() {
         type: "error",
         title: "Erreur",
         message: "Impossible de supprimer l'utilisateur",
+      })
+    }
+  }
+
+  const handleConfirmBooking = async (id: number) => {
+    try {
+      if (isConnectedToAPI) {
+        await apiClient.updateBookingStatus(id, "CONFIRMED")
+        addNotification({
+          type: "success",
+          title: "Réservation confirmée",
+          message: "La réservation a été confirmée avec succès",
+        })
+      } else {
+        setBookings((prev) => ({
+          ...prev,
+          content: prev.content.map((booking) => 
+            booking.id === id ? { ...booking, status: "CONFIRMED" } : booking
+          ),
+        }))
+        addNotification({
+          type: "success",
+          title: "Réservation confirmée (Démo)",
+          message: "La réservation a été confirmée en mode démonstration",
+        })
+      }
+      await loadBookingsData()
+    } catch (error) {
+      addNotification({
+        type: "error",
+        title: "Erreur",
+        message: "Impossible de confirmer la réservation",
+      })
+    }
+  }
+
+  const handleCancelBooking = async (id: number) => {
+    try {
+      if (isConnectedToAPI) {
+        await apiClient.updateBookingStatus(id, "CANCELLED")
+        addNotification({
+          type: "success",
+          title: "Réservation annulée",
+          message: "La réservation a été annulée avec succès",
+        })
+      } else {
+        setBookings((prev) => ({
+          ...prev,
+          content: prev.content.map((booking) => 
+            booking.id === id ? { ...booking, status: "CANCELLED" } : booking
+          ),
+        }))
+        addNotification({
+          type: "success",
+          title: "Réservation annulée (Démo)",
+          message: "La réservation a été annulée en mode démonstration",
+        })
+      }
+      await loadBookingsData()
+    } catch (error) {
+      addNotification({
+        type: "error",
+        title: "Erreur",
+        message: "Impossible d'annuler la réservation",
+      })
+    }
+  }
+
+  const handleDeleteBooking = async (id: number) => {
+    try {
+      if (isConnectedToAPI) {
+        await apiClient.deleteBooking(id)
+        addNotification({
+          type: "success",
+          title: "Réservation supprimée",
+          message: "La réservation a été supprimée avec succès",
+        })
+      } else {
+        setBookings((prev) => ({
+          ...prev,
+          content: prev.content.filter((booking) => booking.id !== id),
+          totalElements: prev.totalElements - 1,
+        }))
+        addNotification({
+          type: "success",
+          title: "Réservation supprimée (Démo)",
+          message: "La réservation a été supprimée en mode démonstration",
+        })
+      }
+      await loadBookingsData()
+    } catch (error) {
+      addNotification({
+        type: "error",
+        title: "Erreur",
+        message: "Impossible de supprimer la réservation",
       })
     }
   }
@@ -936,7 +1115,7 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={monthlyData}>
+                    <AreaChart data={monthlyStats.length > 0 ? monthlyStats : monthlyData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis />
@@ -1215,7 +1394,449 @@ export default function AdminPage() {
             )}
           </TabsContent>
 
-          {/* Autres onglets similaires pour hotels, rooms, bookings... */}
+          <TabsContent value="hotels" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Gestion des hôtels</h2>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher un hôtel..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 w-64"
+                  />
+                </div>
+                <Select value={selectedFilter} onValueChange={setSelectedFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Filtrer par catégorie" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tous</SelectItem>
+                    <SelectItem value="FIVE_STARS">5 étoiles</SelectItem>
+                    <SelectItem value="FOUR_STARS">4 étoiles</SelectItem>
+                    <SelectItem value="THREE_STARS">3 étoiles</SelectItem>
+                    <SelectItem value="LUXURY">Luxe</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => setEditingHotel({} as HotelType)}>
+                  Ajouter un hôtel
+                </Button>
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Hôtel</TableHead>
+                      <TableHead>Localisation</TableHead>
+                      <TableHead>Catégorie</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {hotels.content.map((hotel) => (
+                      <TableRow key={hotel.id}>
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={`/placeholder.svg?height=32&width=32`} />
+                              <AvatarFallback>{hotel.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <span className="font-medium">{hotel.name}</span>
+                              <p className="text-sm text-gray-500">{hotel.address}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{hotel.location}</TableCell>
+                        <TableCell>{getCategoryBadge(hotel.category)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <span className="font-medium mr-1">{hotel.rating}</span>
+                            <Star className="h-4 w-4 text-yellow-400" />
+                            <span className="text-xs text-gray-500 ml-1">({hotel.reviewCount})</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>{hotel.phone}</div>
+                            <div className="text-gray-500">{hotel.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={hotel.available ? "default" : "destructive"}>
+                            {hotel.available ? "Disponible" : "Indisponible"}
+                          </Badge>
+                          {hotel.featured && (
+                            <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-700 border-yellow-200">
+                              Mis en avant
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => setEditingHotel(hotel)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Modifier
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                {hotel.available ? (
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                )}
+                                {hotel.available ? "Désactiver" : "Activer"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-700">
+                Affichage de {currentPage * pageSize + 1} à{" "}
+                {Math.min((currentPage + 1) * pageSize, hotels.totalElements)} sur {hotels.totalElements} hôtels
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                >
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={(currentPage + 1) * pageSize >= hotels.totalElements}
+                >
+                  Suivant
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="rooms" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Gestion des chambres</h2>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher une chambre..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 w-64"
+                  />
+                </div>
+                <Select value={selectedFilter} onValueChange={setSelectedFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Filtrer par type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tous</SelectItem>
+                    <SelectItem value="SINGLE">Simple</SelectItem>
+                    <SelectItem value="DOUBLE">Double</SelectItem>
+                    <SelectItem value="SUITE">Suite</SelectItem>
+                    <SelectItem value="FAMILY">Familiale</SelectItem>
+                    <SelectItem value="DELUXE">Deluxe</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => setEditingRoom({} as Room)}>
+                  Ajouter une chambre
+                </Button>
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Chambre</TableHead>
+                      <TableHead>Hôtel</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Prix / nuit</TableHead>
+                      <TableHead>Capacité</TableHead>
+                      <TableHead>Caractéristiques</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rooms.content.map((room) => (
+                      <TableRow key={room.id}>
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={`/placeholder.svg?height=32&width=32`} />
+                              <AvatarFallback>{room.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <span className="font-medium">{room.name}</span>
+                              <p className="text-sm text-gray-500">N° {room.roomNumber}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{room.hotel?.name || "N/A"}</TableCell>
+                        <TableCell>{room.type}</TableCell>
+                        <TableCell>€{room.pricePerNight}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <span>{room.capacity} personnes</span>
+                            <span className="text-xs text-gray-500 ml-1">({room.bedCount} {room.bedType})</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {room.hasBalcony && (
+                              <Badge variant="outline" className="text-xs">Balcon</Badge>
+                            )}
+                            {room.hasSeaView && (
+                              <Badge variant="outline" className="text-xs">Vue mer</Badge>
+                            )}
+                            {room.hasKitchen && (
+                              <Badge variant="outline" className="text-xs">Cuisine</Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">{room.size} m²</Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={room.available ? "default" : "destructive"}>
+                            {room.available ? "Disponible" : "Indisponible"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => setEditingRoom(room)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Modifier
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                {room.available ? (
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                )}
+                                {room.available ? "Désactiver" : "Activer"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-700">
+                Affichage de {currentPage * pageSize + 1} à{" "}
+                {Math.min((currentPage + 1) * pageSize, rooms.totalElements)} sur {rooms.totalElements} chambres
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                >
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={(currentPage + 1) * pageSize >= rooms.totalElements}
+                >
+                  Suivant
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="bookings" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Gestion des réservations</h2>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher une réservation..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 w-64"
+                  />
+                </div>
+                <Select value={selectedFilter} onValueChange={setSelectedFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Filtrer par statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tous</SelectItem>
+                    <SelectItem value="PENDING">En attente</SelectItem>
+                    <SelectItem value="CONFIRMED">Confirmées</SelectItem>
+                    <SelectItem value="CANCELLED">Annulées</SelectItem>
+                    <SelectItem value="COMPLETED">Terminées</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Référence</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Hôtel / Chambre</TableHead>
+                      <TableHead>Dates</TableHead>
+                      <TableHead>Montant</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Paiement</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bookings.content.map((booking) => (
+                      <TableRow key={booking.id}>
+                        <TableCell>
+                          <div className="font-medium">{booking.bookingReference}</div>
+                          <div className="text-xs text-gray-500">{new Date(booking.createdAt).toLocaleDateString()}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={`/placeholder.svg?height=32&width=32`} />
+                              <AvatarFallback>{booking.guestName?.charAt(0) || "G"}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <span className="font-medium">{booking.guestName}</span>
+                              <p className="text-xs text-gray-500">{booking.guestEmail}</p>
+                              <p className="text-xs text-gray-500">{booking.guestPhone}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{booking.hotel?.name || "N/A"}</div>
+                          <div className="text-sm text-gray-500">{booking.room?.name || "N/A"}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>Arrivée: {new Date(booking.checkInDate).toLocaleDateString()}</div>
+                            <div>Départ: {new Date(booking.checkOutDate).toLocaleDateString()}</div>
+                            <div className="text-xs text-gray-500">{booking.nights} nuits, {booking.guests} personnes</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">€{booking.totalAmount}</div>
+                          {booking.discountAmount > 0 && (
+                            <div className="text-xs text-green-600">-€{booking.discountAmount} réduction</div>
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(booking.status)}</TableCell>
+                        <TableCell>{getStatusBadge(booking.paymentStatus)}</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => setEditingBooking(booking)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Modifier
+                              </DropdownMenuItem>
+                              {booking.status === "PENDING" && (
+                                <DropdownMenuItem onClick={() => handleConfirmBooking(booking.id)}>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Confirmer
+                                </DropdownMenuItem>
+                              )}
+                              {(booking.status === "PENDING" || booking.status === "CONFIRMED") && (
+                                <DropdownMenuItem onClick={() => handleCancelBooking(booking.id)}>
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Annuler
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteBooking(booking.id)}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-700">
+                Affichage de {currentPage * pageSize + 1} à{" "}
+                {Math.min((currentPage + 1) * pageSize, bookings.totalElements)} sur {bookings.totalElements} réservations
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                >
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={(currentPage + 1) * pageSize >= bookings.totalElements}
+                >
+                  Suivant
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -1253,11 +1874,11 @@ export default function AdminPage() {
                     <SelectValue placeholder="Type de chambre" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Standard">Standard</SelectItem>
-                    <SelectItem value="Deluxe">Deluxe</SelectItem>
-                    <SelectItem value="Suite">Suite</SelectItem>
-                    <SelectItem value="Junior Suite">Junior Suite</SelectItem>
-                    <SelectItem value="Presidential Suite">Presidential Suite</SelectItem>
+                    <SelectItem value="SINGLE">Simple</SelectItem>
+                    <SelectItem value="DOUBLE">Double</SelectItem>
+                    <SelectItem value="SUITE">Suite</SelectItem>
+                    <SelectItem value="FAMILY">Familiale</SelectItem>
+                    <SelectItem value="DELUXE">Deluxe</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1296,7 +1917,7 @@ export default function AdminPage() {
                 onClick={() => {
                   handlePredictPrice({
                     hotelId: 1,
-                    roomType: "Standard",
+                    roomType: "SINGLE",
                     checkInDate: "2024-07-15",
                     checkOutDate: "2024-07-20",
                     season: "summer",
@@ -1309,6 +1930,391 @@ export default function AdminPage() {
                 className="bg-purple-600 hover:bg-purple-700"
               >
                 {predictionLoading ? "Prédiction..." : "Prédire le prix"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Modal d'ajout/modification d'hôtel */}
+      {editingHotel && (
+        <Dialog open={!!editingHotel} onOpenChange={(open) => !open && setEditingHotel(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Hotel className="h-5 w-5 mr-2" />
+                {editingHotel.id ? "Modifier l'hôtel" : "Ajouter un nouvel hôtel"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingHotel.id 
+                  ? "Modifiez les informations de l'hôtel ci-dessous" 
+                  : "Remplissez les informations pour ajouter un nouvel hôtel"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label htmlFor="name">Nom de l'hôtel</Label>
+                <Input 
+                  id="name" 
+                  value={editingHotel.name || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, name: e.target.value})}
+                  placeholder="Nom de l'hôtel"
+                />
+              </div>
+              <div>
+                <Label htmlFor="location">Localisation</Label>
+                <Input 
+                  id="location" 
+                  value={editingHotel.location || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, location: e.target.value})}
+                  placeholder="Ville, région"
+                />
+              </div>
+              <div>
+                <Label htmlFor="category">Catégorie</Label>
+                <Select 
+                  value={editingHotel.category || ''} 
+                  onValueChange={(value) => setEditingHotel({...editingHotel, category: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner une catégorie" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="THREE_STARS">3 étoiles</SelectItem>
+                    <SelectItem value="FOUR_STARS">4 étoiles</SelectItem>
+                    <SelectItem value="FIVE_STARS">5 étoiles</SelectItem>
+                    <SelectItem value="LUXURY">Luxe</SelectItem>
+                    <SelectItem value="BOUTIQUE">Boutique</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="address">Adresse</Label>
+                <Input 
+                  id="address" 
+                  value={editingHotel.address || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, address: e.target.value})}
+                  placeholder="Adresse complète"
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Téléphone</Label>
+                <Input 
+                  id="phone" 
+                  value={editingHotel.phone || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, phone: e.target.value})}
+                  placeholder="+216 XX XXX XXX"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input 
+                  id="email" 
+                  value={editingHotel.email || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, email: e.target.value})}
+                  placeholder="contact@hotel.com"
+                  type="email"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="website">Site web</Label>
+                <Input 
+                  id="website" 
+                  value={editingHotel.website || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, website: e.target.value})}
+                  placeholder="https://www.hotel.com"
+                  type="url"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea 
+                  id="description" 
+                  value={editingHotel.description || ''} 
+                  onChange={(e) => setEditingHotel({...editingHotel, description: e.target.value})}
+                  placeholder="Description de l'hôtel"
+                  rows={4}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="available" 
+                  checked={editingHotel.available !== false}
+                  onCheckedChange={(checked) => 
+                    setEditingHotel({...editingHotel, available: !!checked})
+                  }
+                />
+                <Label htmlFor="available">Disponible</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="featured" 
+                  checked={editingHotel.featured === true}
+                  onCheckedChange={(checked) => 
+                    setEditingHotel({...editingHotel, featured: !!checked})
+                  }
+                />
+                <Label htmlFor="featured">Mettre en avant</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingHotel(null)}>
+                Annuler
+              </Button>
+              <Button
+                onClick={() => {
+                  const isNewHotel = !editingHotel.id;
+                  const apiCall = isNewHotel 
+                    ? apiClient.createHotel(editingHotel)
+                    : apiClient.updateHotel(editingHotel.id, editingHotel);
+
+                  apiCall.then(() => {
+                    addNotification({
+                      type: "success",
+                      title: isNewHotel ? "Hôtel créé" : "Hôtel mis à jour",
+                      message: isNewHotel 
+                        ? "L'hôtel a été créé avec succès" 
+                        : "L'hôtel a été mis à jour avec succès"
+                    });
+                    // Refresh hotels list
+                    fetchHotels();
+                    setEditingHotel(null);
+                  }).catch(error => {
+                    console.error("Error saving hotel:", error);
+                    addNotification({
+                      type: "error",
+                      title: "Erreur",
+                      message: "Une erreur est survenue lors de l'enregistrement de l'hôtel"
+                    });
+                  });
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {editingHotel.id ? "Mettre à jour" : "Créer l'hôtel"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Modal d'ajout/modification de chambre */}
+      {editingRoom && (
+        <Dialog open={!!editingRoom} onOpenChange={(open) => !open && setEditingRoom(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Bed className="h-5 w-5 mr-2" />
+                {editingRoom.id ? "Modifier la chambre" : "Ajouter une nouvelle chambre"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingRoom.id 
+                  ? "Modifiez les informations de la chambre ci-dessous" 
+                  : "Remplissez les informations pour ajouter une nouvelle chambre"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label htmlFor="hotel">Hôtel</Label>
+                <Select 
+                  value={editingRoom.hotel?.id?.toString() || ''} 
+                  onValueChange={(value) => {
+                    const selectedHotel = hotels.content.find(h => h.id.toString() === value);
+                    setEditingRoom({...editingRoom, hotel: selectedHotel});
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un hôtel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hotels.content.map((hotel) => (
+                      <SelectItem key={hotel.id} value={hotel.id.toString()}>
+                        {hotel.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="name">Nom de la chambre</Label>
+                <Input 
+                  id="name" 
+                  value={editingRoom.name || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, name: e.target.value})}
+                  placeholder="Nom de la chambre"
+                />
+              </div>
+              <div>
+                <Label htmlFor="roomNumber">Numéro de chambre</Label>
+                <Input 
+                  id="roomNumber" 
+                  value={editingRoom.roomNumber || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, roomNumber: e.target.value})}
+                  placeholder="101"
+                />
+              </div>
+              <div>
+                <Label htmlFor="type">Type de chambre</Label>
+                <Select 
+                  value={editingRoom.type || ''} 
+                  onValueChange={(value) => setEditingRoom({...editingRoom, type: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SINGLE">Simple</SelectItem>
+                    <SelectItem value="DOUBLE">Double</SelectItem>
+                    <SelectItem value="SUITE">Suite</SelectItem>
+                    <SelectItem value="FAMILY">Familiale</SelectItem>
+                    <SelectItem value="DELUXE">Deluxe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="pricePerNight">Prix par nuit (€)</Label>
+                <Input 
+                  id="pricePerNight" 
+                  type="number"
+                  value={editingRoom.pricePerNight || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, pricePerNight: parseFloat(e.target.value)})}
+                  placeholder="150"
+                />
+              </div>
+              <div>
+                <Label htmlFor="capacity">Capacité (personnes)</Label>
+                <Input 
+                  id="capacity" 
+                  type="number"
+                  value={editingRoom.capacity || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, capacity: parseInt(e.target.value)})}
+                  placeholder="2"
+                />
+              </div>
+              <div>
+                <Label htmlFor="size">Taille (m²)</Label>
+                <Input 
+                  id="size" 
+                  type="number"
+                  value={editingRoom.size || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, size: parseFloat(e.target.value)})}
+                  placeholder="25"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bedCount">Nombre de lits</Label>
+                <Input 
+                  id="bedCount" 
+                  type="number"
+                  value={editingRoom.bedCount || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, bedCount: parseInt(e.target.value)})}
+                  placeholder="1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bedType">Type de lit</Label>
+                <Input 
+                  id="bedType" 
+                  value={editingRoom.bedType || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, bedType: e.target.value})}
+                  placeholder="King size"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea 
+                  id="description" 
+                  value={editingRoom.description || ''} 
+                  onChange={(e) => setEditingRoom({...editingRoom, description: e.target.value})}
+                  placeholder="Description de la chambre"
+                  rows={3}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="available" 
+                  checked={editingRoom.available !== false}
+                  onCheckedChange={(checked) => 
+                    setEditingRoom({...editingRoom, available: !!checked})
+                  }
+                />
+                <Label htmlFor="available">Disponible</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="hasBalcony" 
+                  checked={editingRoom.hasBalcony === true}
+                  onCheckedChange={(checked) => 
+                    setEditingRoom({...editingRoom, hasBalcony: !!checked})
+                  }
+                />
+                <Label htmlFor="hasBalcony">Balcon</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="hasSeaView" 
+                  checked={editingRoom.hasSeaView === true}
+                  onCheckedChange={(checked) => 
+                    setEditingRoom({...editingRoom, hasSeaView: !!checked})
+                  }
+                />
+                <Label htmlFor="hasSeaView">Vue mer</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="hasKitchen" 
+                  checked={editingRoom.hasKitchen === true}
+                  onCheckedChange={(checked) => 
+                    setEditingRoom({...editingRoom, hasKitchen: !!checked})
+                  }
+                />
+                <Label htmlFor="hasKitchen">Cuisine</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingRoom(null)}>
+                Annuler
+              </Button>
+              <Button
+                onClick={() => {
+                  const isNewRoom = !editingRoom.id;
+
+                  // Ensure hotel is set
+                  if (!editingRoom.hotel || !editingRoom.hotel.id) {
+                    addNotification({
+                      type: "error",
+                      title: "Erreur",
+                      message: "Veuillez sélectionner un hôtel pour cette chambre"
+                    });
+                    return;
+                  }
+
+                  const apiCall = isNewRoom 
+                    ? apiClient.createRoom(editingRoom)
+                    : apiClient.updateRoom(editingRoom.id, editingRoom);
+
+                  apiCall.then(() => {
+                    addNotification({
+                      type: "success",
+                      title: isNewRoom ? "Chambre créée" : "Chambre mise à jour",
+                      message: isNewRoom 
+                        ? "La chambre a été créée avec succès" 
+                        : "La chambre a été mise à jour avec succès"
+                    });
+                    // Refresh rooms list
+                    fetchRooms();
+                    setEditingRoom(null);
+                  }).catch(error => {
+                    console.error("Error saving room:", error);
+                    addNotification({
+                      type: "error",
+                      title: "Erreur",
+                      message: "Une erreur est survenue lors de l'enregistrement de la chambre"
+                    });
+                  });
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {editingRoom.id ? "Mettre à jour" : "Créer la chambre"}
               </Button>
             </DialogFooter>
           </DialogContent>
